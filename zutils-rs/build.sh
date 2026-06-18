@@ -18,7 +18,21 @@ mkdir -p /root/
 # =============================================================================
 info "Installing dependencies..."
 dnf install -y rustup rpm-build wget musl-gcc musl-devel musl-filesystem musl-libc-static \
+    git \
     --setopt=install_weak_deps=False -q
+
+# — Install latest Go toolchain
+# =============================================================================
+info "[otter] Installing Go toolchain..."
+GO_VERSION=$(curl -sf https://go.dev/VERSION?m=text | head -1 | sed 's/^go//')
+[[ -n "$GO_VERSION" ]] || die "Failed to detect latest Go version"
+ok "[otter] Go version: $GO_VERSION"
+
+curl -sf "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" \
+    -o /tmp/go.tar.gz
+tar -C /usr/local -xf /tmp/go.tar.gz
+export PATH="/usr/local/go/bin:$PATH"
+ok "[otter] Go installed: $(go version)"
 
 # 2 — Setup rustup + musl target (once, shared across all packages)
 # =============================================================================
@@ -121,6 +135,81 @@ build_package "zfetch" \
     "zfetch is a fast, minimal system fetch tool written in Rust with
 multiple built-in themes, TUI configuration, and terminal resizing support." \
     false
+
+# — otter
+# =============================================================================
+info "[otter] Detecting latest tag..."
+OTTER_TAG=$(git ls-remote --tags https://github.com/ferret-linux/otter.git \
+    | grep -o 'refs/tags/[^^{}]*$' \
+    | sed 's|refs/tags/||' \
+    | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+    | sort -V \
+    | tail -1)
+
+[[ -n "$OTTER_TAG" ]] || die "[otter] Failed to detect latest tag"
+ok "[otter] Tag: $OTTER_TAG"
+
+OTTER_WORKDIR="$WORKDIR/otter"
+OTTER_RPMBUILD="$OTTER_WORKDIR/rpmbuild"
+mkdir -p "$OTTER_WORKDIR"
+
+info "[otter] Cloning at $OTTER_TAG..."
+git clone --depth 1 --branch "$OTTER_TAG" \
+    https://github.com/ferret-linux/otter.git \
+    "$OTTER_WORKDIR/src"
+ok "[otter] Source cloned"
+
+info "[otter] Building binary..."
+cd "$OTTER_WORKDIR/src"
+make build
+ok "[otter] Binary built: $(ls -lh "$OTTER_WORKDIR/src/bin/otter")"
+
+info "[otter] Building RPM..."
+mkdir -p "$OTTER_RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+
+cat > "$OTTER_RPMBUILD/SPECS/otter.spec" <<SPEC
+Name:           otter
+Version:        ${OTTER_TAG}
+Release:        1%{?dist}
+Summary:        Spin up host-integrated container environments
+License:        GPL-3.0-only
+BuildArch:      x86_64
+URL:            https://github.com/ferret-linux/otter
+
+%description
+Otter is a container environment manager for host-integrated containers that
+come pre-configured, opinionated, and ready to go. Works with Docker, Podman,
+and nerdctl.
+
+%install
+install -Dm755 "${OTTER_WORKDIR}/src/bin/otter" %{buildroot}/usr/bin/otter
+install -Dm644 "${OTTER_WORKDIR}/src/completions/otter.bash" %{buildroot}/usr/share/bash-completion/completions/otter
+install -Dm644 "${OTTER_WORKDIR}/src/completions/otter.zsh"  %{buildroot}/usr/share/zsh/site-functions/_otter
+install -Dm644 "${OTTER_WORKDIR}/src/completions/otter.fish" %{buildroot}/usr/share/fish/vendor_completions.d/otter.fish
+
+%files
+/usr/bin/otter
+/usr/share/bash-completion/completions/otter
+/usr/share/zsh/site-functions/_otter
+/usr/share/fish/vendor_completions.d/otter.fish
+
+%changelog
+* $(date '+%a %b %d %Y') packages <actions@github.com> - ${OTTER_TAG}-1
+- Automated build from tag ${OTTER_TAG}
+SPEC
+
+rpmbuild \
+    --define "_topdir $OTTER_RPMBUILD" \
+    -bb "$OTTER_RPMBUILD/SPECS/otter.spec" \
+    2>&1
+
+OTTER_RPM=$(find "$OTTER_RPMBUILD/RPMS" -name "otter-*.rpm" | head -1)
+[[ -f "$OTTER_RPM" ]] || die "[otter] RPM not found after build"
+
+cp "$OTTER_RPM" /output/
+ok "[otter] RPM ready: /output/$(basename "$OTTER_RPM")"
+rpm -qp --info "/output/$(basename "$OTTER_RPM")"
+rpm -qp --list "/output/$(basename "$OTTER_RPM")"
 
 for f in /output/*.rpm; do
     [[ -f "$f" ]] || continue
