@@ -1,10 +1,10 @@
 #!/bin/bash
 # =============================================================================
-#  extension-manager/build.sh
+#  bustle/build.sh
 # =============================================================================
 set -euo pipefail
 
-WORKDIR="/tmp/extension-manager-build"
+WORKDIR="/tmp/bustle-build"
 STAGING="$WORKDIR/staging"
 RPMBUILD="$WORKDIR/rpmbuild"
 mkdir -p "$WORKDIR"
@@ -20,29 +20,23 @@ mkdir -p /root/
 # =============================================================================
 info "Installing build dependencies..."
 dnf install -y \
-    gcc \
+    rust cargo \
     meson \
     rpm-build \
     gettext \
-    git \
-    blueprint-compiler \
+    glib2-devel \
     gtk4-devel \
     libadwaita-devel \
-    json-glib-devel \
-    libsoup3-devel \
-    libxml2-devel \
-    glib2-devel \
+    git \
     --setopt=install_weak_deps=False -q
 ok "Dependencies installed"
 
 # 2 — Detect latest stable tag
 # =============================================================================
 info "Detecting latest stable tag..."
-TAG=$(git ls-remote --tags https://github.com/mjakeman/extension-manager.git \
-    | grep -o 'refs/tags/[^^{}]*$' \
-    | sed 's|refs/tags/||' \
-    | sort -V \
-    | tail -1)
+# Uses the GitLab releases API; project ID 26802 is org.freedesktop.Bustle
+TAG=$(curl -sf "https://gitlab.gnome.org/api/v4/projects/26802/releases/?per_page=1" \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['tag_name'])")
 
 [[ -n "$TAG" ]] || die "Failed to detect latest tag"
 
@@ -54,9 +48,9 @@ ok "Version: $VERSION"
 
 # 3 — Clone source
 # =============================================================================
-info "Cloning extension-manager at $TAG..."
+info "Cloning bustle at $TAG..."
 git clone --depth 1 --branch "$TAG" \
-    https://github.com/mjakeman/extension-manager.git \
+    https://gitlab.gnome.org/World/bustle.git \
     "$WORKDIR/src"
 ok "Source cloned"
 
@@ -80,24 +74,22 @@ ok "Build complete"
 info "Writing spec..."
 mkdir -p "$RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
-cat > "$RPMBUILD/SPECS/extension-manager.spec" <<SPEC
-Name:           extension-manager
+cat > "$RPMBUILD/SPECS/bustle.spec" <<SPEC
+Name:           bustle
 Version:        ${VERSION}
 Release:        1%{?dist}
-Summary:        A native tool for browsing and installing GNOME Shell Extensions
-License:        GPL-3.0-only
+Summary:        D-Bus activity viewer and analyser
+License:        LGPL-2.1-or-later
 BuildArch:      x86_64
-URL:            https://github.com/mjakeman/extension-manager
+URL:            https://apps.gnome.org/Bustle/
 
 Requires:       gtk4
 Requires:       libadwaita
-Requires:       json-glib
-Requires:       libsoup3
-Requires:       libxml2
 
 %description
-A native tool for browsing, installing, and managing GNOME Shell Extensions.
-Written with GTK 4 and libadwaita.
+Bustle draws sequence diagrams of D-Bus activity. It shows signal emissions,
+method calls and their corresponding returns, with timestamps for each event
+and the duration of each method call.
 
 %install
 cp -a "${STAGING}/." "%{buildroot}/"
@@ -115,10 +107,10 @@ SPEC
 info "Building RPM..."
 rpmbuild \
     --define "_topdir $RPMBUILD" \
-    -bb "$RPMBUILD/SPECS/extension-manager.spec" \
+    -bb "$RPMBUILD/SPECS/bustle.spec" \
     2>&1
 
-RPM_FILE=$(find "$RPMBUILD/RPMS" -name "extension-manager-*.rpm" | head -1)
+RPM_FILE=$(find "$RPMBUILD/RPMS" -name "bustle-*.rpm" | head -1)
 [[ -f "$RPM_FILE" ]] || die "RPM not found after build"
 
 cp "$RPM_FILE" /output/
