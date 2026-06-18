@@ -27,13 +27,12 @@ echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com
 # 2 — Copr RPMs Download
 # =============================================================================
 info "Downloading packages from COPR..."
-dnf download starship bazaar topgrade \
+dnf download bazaar topgrade \
     --destdir /output \
     --arch x86_64 --arch noarch \
     -q
 
 dnf copr disable -y lilay/topgrade
-dnf copr disable -y atim/starship
 dnf copr disable -y ublue-os/packages
 
 # 3 — Terra RPMs Download
@@ -48,7 +47,7 @@ ok "Terra repo added"
 
 info "Downloading packages from Terra..."
 dnf download eza eza-zsh-completion \
-    scx-scheds scx-tools brave-origin code \
+    scx-scheds scx-tools brave-origin code starship \
     ghostty ghostty-nautilus ghostty-zsh-completion ghostty-terminfo ghostty-shell-integration ghostty-bat-syntax ghostty-neovim ghostty-kio \
     --destdir /output \
     --arch x86_64 --arch noarch \
