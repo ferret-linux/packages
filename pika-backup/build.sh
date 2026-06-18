@@ -25,6 +25,7 @@ dnf install -y \
     rpm-build \
     gettext \
     glib2-devel \
+    openssl-devel \
     gtk4-devel \
     libadwaita-devel \
     yelp-tools \
