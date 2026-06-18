@@ -30,6 +30,7 @@ dnf install -y \
     gtksourceview5-devel \
     vte291-gtk4-devel \
     desktop-file-utils \
+    blueprint-compiler \
     git \
     --setopt=install_weak_deps=False -q
 ok "Dependencies installed"
