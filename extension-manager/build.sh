@@ -23,6 +23,7 @@ dnf install -y \
     gcc \
     meson \
     rpm-build \
+    libbacktrace-devel \
     gettext \
     git \
     blueprint-compiler \
