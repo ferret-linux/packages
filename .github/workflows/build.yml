@@ -62,6 +62,7 @@ jobs:
           - wm-noctalia
           - udev-rules
           - pika-backup
+          - extension-manager
           - nvidia-container-toolkit
 
     steps:
