@@ -19,6 +19,13 @@ mkdir -p /root/
 # 1 — Install build dependencies
 # =============================================================================
 info "Installing build dependencies..."
+
+dnf install -y dnf5-plugins
+
+dnf copr enable ycollet/audinux -y
+
+dnf --refresh makecache
+
 dnf install -y \
     gcc \
     meson \
