@@ -59,6 +59,8 @@ jobs:
           - fedora-logos
           - plasma-lookandfeel-fedora
           - zutils-rs
+          - bustle
+          - resources
           - wm-noctalia
           - udev-rules
           - pika-backup
