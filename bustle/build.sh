@@ -70,6 +70,9 @@ mkdir -p "$STAGING"
 DESTDIR="$STAGING" meson install -C "$WORKDIR/build"
 ok "Build complete"
 
+# — Generate exact file list from staging
+FILES_LIST=$(find "$STAGING" -not -type d | sed "s|^$STAGING||")
+
 # 5 — Write spec
 # =============================================================================
 info "Writing spec..."
@@ -96,7 +99,7 @@ and the duration of each method call.
 cp -a "${STAGING}/." "%{buildroot}/"
 
 %files
-/usr/*
+${FILES_LIST}
 
 %changelog
 * $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-1

@@ -77,6 +77,9 @@ mkdir -p "$STAGING"
 DESTDIR="$STAGING" meson install -C "$WORKDIR/build"
 ok "Build complete"
 
+# — Generate exact file list from staging
+FILES_LIST=$(find "$STAGING" -not -type d | sed "s|^$STAGING||")
+
 # 5 — Write spec
 # =============================================================================
 info "Writing spec..."
@@ -105,13 +108,7 @@ Written with GTK 4 and libadwaita.
 cp -a "${STAGING}/." "%{buildroot}/"
 
 %files
-/usr/bin/extension-manager
-/usr/share/applications/com.mattjakeman.ExtensionManager.desktop
-/usr/share/icons/hicolor/scalable/apps/com.mattjakeman.ExtensionManager.svg
-/usr/share/icons/hicolor/symbolic/apps/com.mattjakeman.ExtensionManager-symbolic.svg
-/usr/share/locale/*/LC_MESSAGES/extension-manager.mo
-/usr/share/metainfo/com.mattjakeman.ExtensionManager.metainfo.xml
-/usr/share/glib-2.0/schemas/com.mattjakeman.ExtensionManager.gschema.xml
+${FILES_LIST}
 
 %changelog
 * $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-1

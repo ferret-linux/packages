@@ -82,6 +82,9 @@ mkdir -p "$STAGING"
 DESTDIR="$STAGING" meson install -C "$WORKDIR/build"
 ok "Build complete"
 
+# — Generate exact file list from staging
+FILES_LIST=$(find "$STAGING" -not -type d | sed "s|^$STAGING||")
+
 # 5 — Write spec
 # =============================================================================
 info "Writing spec..."
@@ -108,8 +111,7 @@ complete system recovery. It is powered by the well-tested BorgBackup software.
 cp -a "${STAGING}/." "%{buildroot}/"
 
 %files
-/usr/*
-/etc/*
+${FILES_LIST}
 
 %changelog
 * $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-1
