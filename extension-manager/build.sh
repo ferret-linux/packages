@@ -32,6 +32,7 @@ dnf install -y \
     libsoup3-devel \
     libxml2-devel \
     glib2-devel \
+    desktop-file-utils \
     --setopt=install_weak_deps=False -q
 ok "Dependencies installed"
 
