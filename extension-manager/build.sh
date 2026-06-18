@@ -105,7 +105,13 @@ Written with GTK 4 and libadwaita.
 cp -a "${STAGING}/." "%{buildroot}/"
 
 %files
-/usr/*
+/usr/bin/extension-manager
+/usr/share/applications/com.mattjakeman.ExtensionManager.desktop
+/usr/share/icons/hicolor/scalable/apps/com.mattjakeman.ExtensionManager.svg
+/usr/share/icons/hicolor/symbolic/apps/com.mattjakeman.ExtensionManager-symbolic.svg
+/usr/share/locale/*/LC_MESSAGES/extension-manager.mo
+/usr/share/metainfo/com.mattjakeman.ExtensionManager.metainfo.xml
+/usr/share/glib-2.0/schemas/com.mattjakeman.ExtensionManager.gschema.xml
 
 %changelog
 * $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-1
