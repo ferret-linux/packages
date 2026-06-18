@@ -34,12 +34,11 @@ ok "Dependencies installed"
 # 2 — Detect latest stable tag
 # =============================================================================
 info "Detecting latest stable tag..."
-# Source is now at GNOME Incubator but has no formal releases yet;
-# the archived GitHub repo retains all tags and is the authoritative tag source.
 VERSION=$(git ls-remote --tags https://github.com/nokyan/resources.git \
     | grep -o 'refs/tags/[^^{}]*$' \
     | sed 's|refs/tags/||' \
     | grep -v -- '-' \
+    | grep -E '^v?[0-9]+\.[0-9]+' \
     | sed 's/^v//' \
     | sort -V \
     | tail -1)

@@ -65,6 +65,7 @@ ok "Source cloned"
 info "Configuring with meson..."
 meson setup "$WORKDIR/build" "$WORKDIR/src" \
     --prefix=/usr \
+    -Dbacktrace=false \
     --buildtype=release
 
 info "Compiling..."
