@@ -48,7 +48,7 @@ ok "Terra repo added"
 
 info "Downloading packages from Terra..."
 dnf download eza eza-zsh-completion \
-    scx-scheds scx-tools brave-origin code starship \
+    scx-scheds scx-tools brave-origin brave-keyring code starship \
     ghostty ghostty-nautilus ghostty-zsh-completion ghostty-terminfo ghostty-shell-integration ghostty-bat-syntax ghostty-neovim ghostty-kio \
     --destdir /output \
     --arch x86_64 --arch noarch \
