@@ -61,6 +61,7 @@ jobs:
           - zutils-rs
           - bustle
           - resources
+          - pods
           - wm-noctalia
           - udev-rules
           - pika-backup
