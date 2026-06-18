@@ -28,6 +28,7 @@ dnf install -y \
     gtk4-devel \
     libadwaita-devel \
     git \
+    desktop-file-utils \
     --setopt=install_weak_deps=False -q
 ok "Dependencies installed"
 
