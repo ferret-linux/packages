@@ -61,6 +61,7 @@ jobs:
           - zutils-rs
           - wm-noctalia
           - udev-rules
+          - pika-backup
           - nvidia-container-toolkit
 
     steps:
