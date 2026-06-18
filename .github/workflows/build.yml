@@ -61,7 +61,6 @@ jobs:
           - zutils-rs
           - wm-noctalia
           - udev-rules
-          - falcond
           - nvidia-container-toolkit
 
     steps:
