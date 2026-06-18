@@ -19,6 +19,7 @@ dnf install -y dnf5-plugins --setopt=install_weak_deps=False -q
 info "Enabling COPRs..."
 dnf copr enable -y lilay/topgrade
 dnf copr enable -y ublue-os/packages
+dnf copr enable -y trixieua/morewaita-icon-theme
 dnf config-manager addrepo -y --from-repofile=https://brave-browser-rpm-release.s3.brave.com/brave-browser.repo
 
 sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc &&
@@ -27,7 +28,7 @@ echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com
 # 2 — Copr RPMs Download
 # =============================================================================
 info "Downloading packages from COPR..."
-dnf download bazaar topgrade \
+dnf download bazaar topgrade morewaita-icon-theme \
     --destdir /output \
     --arch x86_64 --arch noarch \
     -q
