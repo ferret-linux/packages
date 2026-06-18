@@ -18,8 +18,11 @@ dnf install -y dnf5-plugins --setopt=install_weak_deps=False -q
 
 info "Enabling COPRs..."
 dnf copr enable -y lilay/topgrade
-dnf copr enable -y atim/starship
 dnf copr enable -y ublue-os/packages
+dnf config-manager addrepo -y --from-repofile=https://brave-browser-rpm-release.s3.brave.com/brave-browser.repo
+
+sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc &&
+echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\nautorefresh=1\ntype=rpm-md\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/vscode.repo > /dev/null
 
 # 2 — Copr RPMs Download
 # =============================================================================
@@ -45,7 +48,7 @@ ok "Terra repo added"
 
 info "Downloading packages from Terra..."
 dnf download eza eza-zsh-completion \
-    scx-scheds scx-tools \
+    scx-scheds scx-tools brave-origin code \
     ghostty ghostty-nautilus ghostty-zsh-completion ghostty-terminfo ghostty-shell-integration ghostty-bat-syntax ghostty-neovim ghostty-kio \
     --destdir /output \
     --arch x86_64 --arch noarch \
