@@ -63,6 +63,8 @@ jobs:
           - resources
           - pods
           - wm-noctalia
+          - wardrobe
+          - gnome-shell-extension-all-in-one-clipboard
           - udev-rules
           - pika-backup
           - extension-manager
