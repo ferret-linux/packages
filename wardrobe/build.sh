@@ -24,6 +24,7 @@ dnf install -y \
     rpm-build \
     gettext \
     git \
+    glib2-devel \
     python3-gobject \
     desktop-file-utils \
     libappstream-glib \

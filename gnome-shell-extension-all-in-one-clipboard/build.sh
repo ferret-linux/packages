@@ -22,6 +22,7 @@ info "Installing build dependencies..."
 dnf install -y \
     jq \
     glib2 \
+    glib2-devel \
     gettext \
     git \
     --setopt=install_weak_deps=False -q
