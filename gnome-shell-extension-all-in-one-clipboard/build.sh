@@ -24,6 +24,7 @@ dnf install -y \
     glib2 \
     glib2-devel \
     gettext \
+    rpm-build \
     git \
     --setopt=install_weak_deps=False -q
 ok "Dependencies installed"

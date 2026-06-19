@@ -25,6 +25,7 @@ dnf install -y \
     gettext \
     git \
     glib2-devel \
+    gtk4 \
     python3-gobject \
     desktop-file-utils \
     libappstream-glib \
