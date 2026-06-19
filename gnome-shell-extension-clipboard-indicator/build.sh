@@ -1,10 +1,10 @@
 #!/bin/bash
 # =============================================================================
-#  gnome-shell-extension-all-in-one-clipboard/build.sh
+#  gnome-shell-extension-clipboard-indicator/build.sh
 # =============================================================================
 set -euo pipefail
 
-WORKDIR="/tmp/aio-clipboard-build"
+WORKDIR="/tmp/clipboard-indicator-build"
 STAGING="$WORKDIR/staging"
 RPMBUILD="$WORKDIR/rpmbuild"
 mkdir -p "$WORKDIR"
@@ -20,8 +20,6 @@ mkdir -p /root/
 # =============================================================================
 info "Installing build dependencies..."
 dnf install -y \
-    jq \
-    glib2 \
     glib2-devel \
     gettext \
     rpm-build \
@@ -32,7 +30,7 @@ ok "Dependencies installed"
 # 2 — Detect latest stable tag
 # =============================================================================
 info "Detecting latest stable tag..."
-TAG=$(git ls-remote --tags https://github.com/NiffirgkcaJ/all-in-one-clipboard.git \
+TAG=$(git ls-remote --tags https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator.git \
     | grep -o 'refs/tags/[^^{}]*$' \
     | sed 's|refs/tags/||' \
     | grep -E '^v[0-9]+$' \
@@ -48,55 +46,41 @@ ok "Version: $VERSION"
 
 # 3 — Clone source
 # =============================================================================
-info "Cloning all-in-one-clipboard at $TAG..."
+info "Cloning clipboard-indicator at $TAG..."
 git clone --depth 1 --branch "$TAG" \
-    https://github.com/NiffirgkcaJ/all-in-one-clipboard.git \
+    https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator.git \
     "$WORKDIR/src"
 ok "Source cloned"
 
 # 4 — Resolve UUID and build
 # =============================================================================
-EXT_SRC="$WORKDIR/src/gnome-extensions/extension"
-UUID=$(jq -r '.uuid' "$EXT_SRC/metadata.json")
-[[ -n "$UUID" && "$UUID" != "null" ]] || die "Failed to parse UUID from metadata.json"
+SRC="$WORKDIR/src"
+UUID=$(grep -o '"uuid"[[:space:]]*:[[:space:]]*"[^"]*"' "$SRC/metadata.json" | sed 's/.*"\([^"]*\)"$/\1/')
+[[ -n "$UUID" ]] || die "Failed to parse UUID from metadata.json"
 ok "UUID: $UUID"
 
 INSTALL_DIR="$STAGING/usr/share/gnome-shell/extensions/$UUID"
-
-info "Staging extension source..."
 mkdir -p "$INSTALL_DIR"
-cp -r "$EXT_SRC"/* "$INSTALL_DIR/"
 
-if [[ -d "$INSTALL_DIR/schemas" ]]; then
-    info "Compiling GSettings schema..."
-    glib-compile-schemas "$INSTALL_DIR/schemas/"
-fi
-
-info "Compiling GResource bundle..."
-( cd "$INSTALL_DIR" && glib-compile-resources --target=resources.gresource all-in-one-clipboard.gresource.xml )
-
-info "Cleaning up source assets..."
-rm -rf "$INSTALL_DIR/assets"
-rm -f "$INSTALL_DIR/all-in-one-clipboard.gresource.xml"
+info "Compiling GSettings schema..."
+glib-compile-schemas --strict --targetdir="$SRC/schemas/" "$SRC/schemas"
 
 info "Compiling translations..."
-TRANSLATION_DIR="$WORKDIR/src/gnome-extensions/translation"
-if [[ -d "$TRANSLATION_DIR" ]]; then
-    for po_file in "$TRANSLATION_DIR"/*.po; do
-        [[ -f "$po_file" ]] || continue
-        base=$(basename "$po_file" .po)
-        [[ "$base" == *"@"* ]] || continue
+for po_file in "$SRC"/locale/*/LC_MESSAGES/*.po; do
+    [[ -f "$po_file" ]] || continue
+    msgfmt "$po_file" -o "${po_file%.po}.mo"
+done
+ok "Translations compiled"
 
-        lang_code=${base#*@}
-        domain=${base%@*}
-
-        mkdir -p "$INSTALL_DIR/locale/$lang_code/LC_MESSAGES"
-        msgfmt --output-file="$INSTALL_DIR/locale/$lang_code/LC_MESSAGES/$domain.mo" "$po_file"
-        ok "Compiled translation: $domain ($lang_code)"
-    done
-else
-    info "No translation directory found, skipping"
-fi
+info "Staging extension files..."
+cp -r \
+    "$SRC"/*.js \
+    "$SRC/locale" \
+    "$SRC/metadata.json" \
+    "$SRC/stylesheet.css" \
+    "$SRC/LICENSE.rst" \
+    "$SRC/schemas" \
+    "$INSTALL_DIR/"
 ok "Build complete"
 
 # — Generate exact file list from staging
@@ -107,21 +91,21 @@ FILES_LIST=$(find "$STAGING" -not -type d | sed "s|^$STAGING||")
 info "Writing spec..."
 mkdir -p "$RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
-cat > "$RPMBUILD/SPECS/gnome-shell-extension-all-in-one-clipboard.spec" <<SPEC
-Name:           gnome-shell-extension-all-in-one-clipboard
+cat > "$RPMBUILD/SPECS/gnome-shell-extension-clipboard-indicator.spec" <<SPEC
+Name:           gnome-shell-extension-clipboard-indicator
 Version:        ${VERSION}
 Release:        1%{?dist}
-Summary:        A clipboard manager combining history, emojis, GIFs, kaomojis and symbols
-License:        ISC
+Summary:        The most popular clipboard manager for GNOME
+License:        MIT
 BuildArch:      noarch
-URL:            https://github.com/NiffirgkcaJ/all-in-one-clipboard
+URL:            https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator
 
 Requires:       gnome-shell
 
 %description
-All-in-One Clipboard is a GNOME Shell extension that combines your clipboard
-history, emojis, GIFs, kaomojis, and symbols into a single, searchable
-interface.
+Clipboard Indicator is a clipboard manager extension for GNOME Shell with
+over 1M downloads. It keeps a history of copied text and lets you quickly
+access and paste from it.
 
 %install
 cp -a "${STAGING}/." "%{buildroot}/"
@@ -139,10 +123,10 @@ SPEC
 info "Building RPM..."
 rpmbuild \
     --define "_topdir $RPMBUILD" \
-    -bb "$RPMBUILD/SPECS/gnome-shell-extension-all-in-one-clipboard.spec" \
+    -bb "$RPMBUILD/SPECS/gnome-shell-extension-clipboard-indicator.spec" \
     2>&1
 
-RPM_FILE=$(find "$RPMBUILD/RPMS" -name "gnome-shell-extension-all-in-one-clipboard-*.rpm" | head -1)
+RPM_FILE=$(find "$RPMBUILD/RPMS" -name "gnome-shell-extension-clipboard-indicator-*.rpm" | head -1)
 [[ -f "$RPM_FILE" ]] || die "RPM not found after build"
 
 cp "$RPM_FILE" /output/
