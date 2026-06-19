@@ -1,8 +1,13 @@
 #!/bin/bash
 # =============================================================================
 #  gnome-shell-extension-clipboard-indicator/build.sh
+#  Source: https://extensions.gnome.org/extension/779/clipboard-indicator/
+#  (packaged directly from the extensions.gnome.org CDN, NOT from GitHub)
 # =============================================================================
 set -euo pipefail
+
+EXTENSION_PK=779   # https://extensions.gnome.org/extension/779/clipboard-indicator/
+EGO_BASE="https://extensions.gnome.org"
 
 WORKDIR="/tmp/clipboard-indicator-build"
 STAGING="$WORKDIR/staging"
@@ -23,64 +28,84 @@ dnf install -y \
     glib2-devel \
     gettext \
     rpm-build \
-    git \
+    unzip \
+    jq \
+    curl \
     --setopt=install_weak_deps=False -q
 ok "Dependencies installed"
 
-# 2 — Detect latest stable tag
+# 2 — Query extensions.gnome.org for extension metadata + latest version
 # =============================================================================
-info "Detecting latest stable tag..."
-TAG=$(git ls-remote --tags https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator.git \
-    | grep -o 'refs/tags/[^^{}]*$' \
-    | sed 's|refs/tags/||' \
-    | grep -E '^v[0-9]+$' \
-    | sed 's/^v//' \
-    | sort -n \
-    | tail -1 \
-    | sed 's/^/v/')
+info "Querying extension-info for pk=${EXTENSION_PK}..."
+INFO_JSON="$WORKDIR/extension-info.json"
+curl -fsSL "${EGO_BASE}/extension-info/?pk=${EXTENSION_PK}" -o "$INFO_JSON" \
+    || die "Failed to fetch extension-info"
 
-[[ -n "$TAG" ]] || die "Failed to detect latest tag"
-VERSION=${TAG#v}
-ok "Tag: $TAG"
-ok "Version: $VERSION"
+UUID=$(jq -r '.uuid' "$INFO_JSON")
+[[ -n "$UUID" && "$UUID" != "null" ]] || die "Failed to parse UUID from extension-info"
+ok "UUID: $UUID"
 
-# 3 — Clone source
+# The shell_version_map lists, per supported GNOME Shell version, the
+# extension "version" (build number) and its download "pk" (version_tag).
+# We want the single highest version number across all shell versions —
+# that's the latest published release of the extension.
+VERSION=$(jq -r '.shell_version_map | to_entries | map(.value.version) | max' "$INFO_JSON")
+[[ -n "$VERSION" && "$VERSION" != "null" ]] || die "Failed to determine latest version"
+ok "Latest extension version: $VERSION"
+
+DESCRIPTION=$(jq -r '.description // "No description provided."' "$INFO_JSON")
+NAME=$(jq -r '.name' "$INFO_JSON")
+HOMEPAGE_LINK="${EGO_BASE}/extension/${EXTENSION_PK}/$(jq -r '.link' "$INFO_JSON" | sed -E 's#^/extension/[0-9]+/##; s#/$##')"
+
+# 3 — Download the extension package straight from the e.g.o CDN
 # =============================================================================
-info "Cloning clipboard-indicator at $TAG..."
-git clone --depth 1 --branch "$TAG" \
-    https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator.git \
-    "$WORKDIR/src"
-ok "Source cloned"
+# Documented, stable URL format:
+#   https://extensions.gnome.org/extension-data/{uuid}.v{version}.shell-extension.zip
+ZIP_URL="${EGO_BASE}/extension-data/${UUID}.v${VERSION}.shell-extension.zip"
+ZIP_FILE="$WORKDIR/extension.zip"
 
-# 4 — Resolve UUID and build
+info "Downloading ${ZIP_URL} ..."
+curl -fsSL "$ZIP_URL" -o "$ZIP_FILE" \
+    || die "Failed to download extension package"
+ok "Downloaded extension zip"
+
+# 4 — Extract & stage
 # =============================================================================
 SRC="$WORKDIR/src"
-UUID=$(grep -o '"uuid"[[:space:]]*:[[:space:]]*"[^"]*"' "$SRC/metadata.json" | sed 's/.*"\([^"]*\)"$/\1/')
-[[ -n "$UUID" ]] || die "Failed to parse UUID from metadata.json"
-ok "UUID: $UUID"
+mkdir -p "$SRC"
+unzip -q -o "$ZIP_FILE" -d "$SRC"
+ok "Extracted extension package"
+
+PARSED_UUID=$(grep -o '"uuid"[[:space:]]*:[[:space:]]*"[^"]*"' "$SRC/metadata.json" | sed 's/.*"\([^"]*\)"$/\1/')
+[[ -n "$PARSED_UUID" ]] || die "Failed to parse UUID from metadata.json"
+[[ "$PARSED_UUID" == "$UUID" ]] || info "Note: metadata.json uuid ($PARSED_UUID) differs from e.g.o uuid ($UUID), using metadata.json value"
+UUID="$PARSED_UUID"
+ok "UUID confirmed: $UUID"
 
 INSTALL_DIR="$STAGING/usr/share/gnome-shell/extensions/$UUID"
 mkdir -p "$INSTALL_DIR"
 
-info "Compiling GSettings schema..."
-glib-compile-schemas --strict --targetdir="$SRC/schemas/" "$SRC/schemas"
+if [[ -d "$SRC/schemas" ]]; then
+    info "Compiling GSettings schema..."
+    glib-compile-schemas --strict --targetdir="$SRC/schemas/" "$SRC/schemas"
+fi
 
-info "Compiling translations..."
-for po_file in "$SRC"/locale/*/LC_MESSAGES/*.po; do
-    [[ -f "$po_file" ]] || continue
-    msgfmt "$po_file" -o "${po_file%.po}.mo"
-done
-ok "Translations compiled"
+if [[ -d "$SRC/locale" ]]; then
+    info "Compiling translations..."
+    for po_file in "$SRC"/locale/*/LC_MESSAGES/*.po; do
+        [[ -f "$po_file" ]] || continue
+        msgfmt "$po_file" -o "${po_file%.po}.mo"
+    done
+    ok "Translations compiled"
+fi
 
 info "Staging extension files..."
-cp -r \
-    "$SRC"/*.js \
-    "$SRC/locale" \
-    "$SRC/metadata.json" \
-    "$SRC/stylesheet.css" \
-    "$SRC/LICENSE.rst" \
-    "$SRC/schemas" \
-    "$INSTALL_DIR/"
+shopt -s nullglob
+cp -r "$SRC"/*.js "$INSTALL_DIR/" 2>/dev/null || true
+for item in locale metadata.json stylesheet.css LICENSE.rst LICENSE schemas; do
+    [[ -e "$SRC/$item" ]] && cp -r "$SRC/$item" "$INSTALL_DIR/"
+done
+shopt -u nullglob
 ok "Build complete"
 
 # — Generate exact file list from staging
@@ -95,17 +120,15 @@ cat > "$RPMBUILD/SPECS/gnome-shell-extension-clipboard-indicator.spec" <<SPEC
 Name:           gnome-shell-extension-clipboard-indicator
 Version:        ${VERSION}
 Release:        1%{?dist}
-Summary:        The most popular clipboard manager for GNOME
+Summary:        ${NAME}
 License:        MIT
 BuildArch:      noarch
-URL:            https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator
+URL:            ${HOMEPAGE_LINK}
 
 Requires:       gnome-shell
 
 %description
-Clipboard Indicator is a clipboard manager extension for GNOME Shell with
-over 1M downloads. It keeps a history of copied text and lets you quickly
-access and paste from it.
+${DESCRIPTION}
 
 %install
 cp -a "${STAGING}/." "%{buildroot}/"
@@ -115,7 +138,7 @@ ${FILES_LIST}
 
 %changelog
 * $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-1
-- Automated build from tag ${TAG}
+- Automated build from extensions.gnome.org (pk=${EXTENSION_PK}, version=${VERSION})
 SPEC
 
 # 6 — Build RPM
@@ -129,6 +152,7 @@ rpmbuild \
 RPM_FILE=$(find "$RPMBUILD/RPMS" -name "gnome-shell-extension-clipboard-indicator-*.rpm" | head -1)
 [[ -f "$RPM_FILE" ]] || die "RPM not found after build"
 
+mkdir -p /output
 cp "$RPM_FILE" /output/
 
 # 7 — Sanitize filename & summarize
