@@ -80,6 +80,11 @@ mkdir -p "$STAGING"
 DESTDIR="$STAGING" meson install -C "$WORKDIR/build"
 ok "Build complete"
 
+# — Normalize Python shebang for target systems
+find "$STAGING" -type f -print0 | \
+    xargs -0 grep -rlZ '#!/usr/sbin/python3' 2>/dev/null | \
+    xargs -0 --no-run-if-empty sed -i 's|#!/usr/sbin/python3|#!/usr/bin/python3|g'
+
 # — Generate exact file list from staging
 FILES_LIST=$(find "$STAGING" -not -type d | sed "s|^$STAGING||")
 
