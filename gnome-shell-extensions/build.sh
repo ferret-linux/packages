@@ -190,6 +190,36 @@ build_extension() {
     shopt -u nullglob
     ok "Staging complete"
 
+    # Sanitize staged .js files for rpmbuild's brp-mangle-shebangs check.
+    #
+    # GNOME Shell extension .js files are loaded as ES modules by the Shell's
+    # own JS engine — they are never executed directly via their own shebang
+    # line, regardless of what that line says. Some upstream projects (e.g.
+    # those built with meson) ship a helper script with an unsubstituted
+    # build-time placeholder shebang, like "#!@GJS@ -m" instead of the final
+    # "#!/usr/bin/env gjs -m" meson would normally substitute at install
+    # time. rpmbuild's %install phase runs a strict brp-mangle-shebangs
+    # check that hard-fails the build on any shebang not starting with '/',
+    # even though the broken line is harmless at runtime (nothing in the
+    # actual install-and-run path executes these files as "./file.js").
+    #
+    # Fix: strip the executable bit from every staged .js file. This matches
+    # how these files actually get used in practice, and sidesteps the
+    # shebang check entirely (rpmbuild only inspects shebangs on files that
+    # are executable). Belt-and-suspenders: also neutralize any leftover
+    # unsubstituted "#!@SOMETHING@" template shebang text, in case some
+    # other tooling down the line still cares about file content rather
+    # than the executable bit.
+    info "Sanitizing staged .js files (shebangs / executable bits)..."
+    while IFS= read -r -d '' js_file; do
+        if head -c 64 "$js_file" | grep -qE '^#!.*@[A-Za-z0-9_]+@'; then
+            info "  fixing unsubstituted template shebang in ${js_file#$INSTALL_DIR/}"
+            sed -i '1s|^#!.*@[A-Za-z0-9_]\+@.*$|#!/usr/bin/env gjs|' "$js_file"
+        fi
+        chmod -x "$js_file"
+    done < <(find "$INSTALL_DIR" -name '*.js' -print0)
+    ok "Sanitization complete"
+
     # — Generate exact file list from staging
     local FILES_LIST
     FILES_LIST=$(find "$STAGING" -not -type d | sed "s|^$STAGING||")
