@@ -220,6 +220,34 @@ build_extension() {
     done < <(find "$INSTALL_DIR" -name '*.js' -print0)
     ok "Sanitization complete"
 
+    # Normalize permissions across the whole staged tree.
+    #
+    # extensions.gnome.org's zips don't guarantee sane Unix permissions on
+    # their contents — some files (observed: metadata.json on several
+    # extensions) come through as 0600 (owner-read/write only). zip's
+    # format can store POSIX permission bits in its "extra field", and
+    # `unzip` applies them by default; cp -r then carries that restrictive
+    # mode straight through into staging, and rpmbuild bakes it into the
+    # RPM verbatim.
+    #
+    # The practical effect: GNOME Shell (running as the logged-in user)
+    # can't read a root-owned 0600 metadata.json after install, so
+    # `gnome-extensions list` silently omits the extension entirely — no
+    # error, it just doesn't show up. This breaks every extension built by
+    # this script, not just one.
+    #
+    # Fix: force standard, predictable, world-readable permissions on the
+    # entire staging tree right before packaging, regardless of whatever
+    # the upstream zip happened to contain. Directories need to be
+    # traversable (755) and files just need to be world-readable (644) —
+    # nothing in a GNOME Shell extension needs to be executable, since
+    # everything is loaded as a JS module or read as data, never run
+    # directly as a standalone program.
+    info "Normalizing staged file permissions..."
+    find "$STAGING" -type d -exec chmod 755 {} +
+    find "$STAGING" -type f -exec chmod 644 {} +
+    ok "Permissions normalized"
+
     # — Generate exact file list from staging
     local FILES_LIST
     FILES_LIST=$(find "$STAGING" -not -type d | sed "s|^$STAGING||")
