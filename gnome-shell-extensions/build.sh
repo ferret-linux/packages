@@ -181,13 +181,18 @@ build_extension() {
     fi
 
     info "Staging extension files..."
-    shopt -s nullglob
-    cp -r "$SRC"/*.js "$INSTALL_DIR/" 2>/dev/null || true
-    for item in locale metadata.json stylesheet.css stylesheet-dark.css stylesheet-light.css \
-                LICENSE.rst LICENSE LICENSE.md schemas icons resources ui; do
-        [[ -e "$SRC/$item" ]] && cp -r "$SRC/$item" "$INSTALL_DIR/"
-    done
-    shopt -u nullglob
+    # Copy the entire extracted tree as-is, rather than allowlisting
+    # specific top-level files/dirs. The previous allowlist (*.js plus a
+    # fixed set of directory names) assumed every extension keeps its code
+    # flat in the root, which holds for simple extensions like
+    # clipboard-indicator but breaks larger ones that organize their own
+    # source into subdirectories — e.g. o-tiling's utils/log.js or
+    # gtk4-ding's app/enums.js. Those directory names weren't in the
+    # allowlist, so they were silently never staged, and the extension
+    # would fail at runtime with an ImportError the moment it tried to
+    # load something from the missing folder. Copying everything sidesteps
+    # the need to predict every extension's internal layout up front.
+    cp -r "$SRC"/. "$INSTALL_DIR/"
     ok "Staging complete"
 
     # Sanitize staged .js files for rpmbuild's brp-mangle-shebangs check.
