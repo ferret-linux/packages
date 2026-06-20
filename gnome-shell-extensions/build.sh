@@ -213,7 +213,7 @@ build_extension() {
     info "Sanitizing staged .js files (shebangs / executable bits)..."
     while IFS= read -r -d '' js_file; do
         if head -c 64 "$js_file" | grep -qE '^#!.*@[A-Za-z0-9_]+@'; then
-            info "  fixing unsubstituted template shebang in ${js_file#$INSTALL_DIR/}"
+            info "  fixing unsubstituted template shebang in ${js_file#"$INSTALL_DIR"/}"
             sed -i '1s|^#!.*@[A-Za-z0-9_]\+@.*$|#!/usr/bin/env gjs|' "$js_file"
         fi
         chmod -x "$js_file"
