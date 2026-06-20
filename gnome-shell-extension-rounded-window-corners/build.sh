@@ -46,12 +46,21 @@ UUID=$(jq -r '.uuid' "$INFO_JSON")
 ok "UUID: $UUID"
 
 # The shell_version_map lists, per supported GNOME Shell version, the
-# extension "version" (build number) and its download "pk" (version_tag).
-# We want the single highest version number across all shell versions —
-# that's the latest published release of the extension.
+# extension "version" (build number) and a "pk" (version_tag) — the pk
+# of that *specific build*, used by the download endpoint. This pk is NOT
+# the same as the extension's own top-level pk (EXTENSION_PK).
+# We want the entry with the single highest "version" number across all
+# shell versions — that's the latest published release of the extension —
+# and we need its corresponding "pk" to build the download URL.
 VERSION=$(jq -r '.shell_version_map | to_entries | map(.value.version) | max' "$INFO_JSON")
 [[ -n "$VERSION" && "$VERSION" != "null" ]] || die "Failed to determine latest version"
 ok "Latest extension version: $VERSION"
+
+VERSION_TAG=$(jq -r --argjson v "$VERSION" \
+    '.shell_version_map | to_entries | map(select(.value.version == $v)) | .[0].value.pk' \
+    "$INFO_JSON")
+[[ -n "$VERSION_TAG" && "$VERSION_TAG" != "null" ]] || die "Failed to determine version_tag (pk) for version $VERSION"
+ok "Version tag (download pk): $VERSION_TAG"
 
 DESCRIPTION=$(jq -r '.description // "No description provided."' "$INFO_JSON")
 NAME=$(jq -r '.name' "$INFO_JSON")
@@ -59,14 +68,16 @@ HOMEPAGE_LINK="${EGO_BASE}/extension/${EXTENSION_PK}/$(jq -r '.link' "$INFO_JSON
 
 # 3 — Download the extension package straight from the e.g.o CDN
 # =============================================================================
-# Documented, stable URL format:
-#   https://extensions.gnome.org/extension-data/{uuid}.v{version}.shell-extension.zip
+# Live download endpoint (this is the URL the site's own "Download" button
+# uses) — note this takes the per-build "pk" (version_tag), NOT the bare
+# version number:
+#   https://extensions.gnome.org/download-extension/{uuid}.shell-extension.zip?version_tag={pk}
 # Note: upstream source for this extension is written in TypeScript, but
 # extensions.gnome.org only accepts/serves plain JS — the zip already
 # contains compiled (tsc-transpiled) .js files. No TS toolchain is needed
 # here; we're just unpacking an already-built package, same as any other
 # extension distributed through this site.
-ZIP_URL="${EGO_BASE}/extension-data/${UUID}.v${VERSION}.shell-extension.zip"
+ZIP_URL="${EGO_BASE}/download-extension/${UUID}.shell-extension.zip?version_tag=${VERSION_TAG}"
 ZIP_FILE="$WORKDIR/extension.zip"
 
 info "Downloading ${ZIP_URL} ..."
