@@ -64,8 +64,7 @@ jobs:
           - pods
           - wm-noctalia
           - wardrobe
-          - gnome-shell-extension-clipboard-indicator
-          - gnome-shell-extension-rounded-window-corners
+          - gnome-shell-extensions
           - udev-rules
           - pika-backup
           - extension-manager
