@@ -55,7 +55,6 @@ jobs:
           - helium-drm
           - gui-cli
           - docker-ce
-          - ferret-settings
           - fedora-logos
           - plasma-lookandfeel-fedora
           - zutils-rs
