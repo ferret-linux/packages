@@ -38,12 +38,19 @@ mkdir -p /root/
 EXTENSIONS=(
     "779:clipboard-indicator:MIT"
     "7048:rounded-window-corners-reborn:GPL-3.0-or-later"
-    "9875:o-tiling:GPL-3.0-or-later"
+    "8502:mosaic:GPL-3.0-or-later"
     "7065:tiling-shell:GPL-3.0-or-later"
     "97:coverflow-alt-tab:GPL-2.0-or-later"
-    "5263:gtk4-desktop-icons-ng-ding:GPL-3.0-or-later"
+    "2087:desktop-icons-ng-ding:GPL-3.0-or-later"
     "7535:accent-directories:GPL-3.0-or-later"
     "7502:auto-accent-colour:GPL-3.0-or-later"
+    "5177:vertical-workspaces:GPL-3.0-or-later"
+    "6099:paperwm:GPL-3.0-or-later"
+    "3210:compiz-windows-effect:GPL-3.0-or-later"
+    "4679:burn-my-windows:GPL-3.0-or-later"
+    "3628:arcmenu:GPL-3.0-or-later"
+    "307:dash-to-dock:GPL-3.0-or-later"
+    "1160:dash-to-panel:GPL-3.0-or-later"
 )
 
 # 0 — Install build dependencies (once, shared across all extensions)
