@@ -41,7 +41,6 @@ EXTENSIONS=(
     "8502:mosaic:GPL-3.0-or-later"
     "7065:tiling-shell:GPL-3.0-or-later"
     "97:coverflow-alt-tab:GPL-2.0-or-later"
-    "2087:desktop-icons-ng-ding:GPL-3.0-or-later"
     "7535:accent-directories:GPL-3.0-or-later"
     "7502:auto-accent-colour:GPL-3.0-or-later"
     "5177:vertical-workspaces:GPL-3.0-or-later"
