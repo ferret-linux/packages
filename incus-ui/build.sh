@@ -21,7 +21,9 @@ mkdir -p /root/
 # =============================================================================
 info "Installing build dependencies..."
 dnf install -y \
-    nodejs \
+    nodejs22 \
+    nodejs22-npm \
+    nodejs22-npm-bin \
     yarnpkg \
     rpm-build \
     git \
