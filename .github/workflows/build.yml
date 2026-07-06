@@ -68,6 +68,7 @@ jobs:
           - zutils-rs
           - resources
           - pods
+          - incus-ui
           - wm-noctalia
           - gnome-shell-extensions
           - udev-rules
