@@ -32,7 +32,7 @@ ok "Terra repo added"
 # =============================================================================
 info "Downloading packages..."
 dnf download niri mangowm \
-    noctalia-shell-v5 qt5ct qt6ct \
+    qt5ct qt6ct \
     cliphist nwg-look xcur2png \
     --destdir /output \
     --arch x86_64 --arch noarch \
