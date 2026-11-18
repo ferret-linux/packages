@@ -91,7 +91,7 @@ jobs:
             -e GITHUB_TOKEN \
             -v "${{ github.workspace }}/${{ matrix.package }}:/build/${{ matrix.package }}:ro" \
             -v "${{ github.workspace }}/output/${{ matrix.package }}:/output" \
-            quay.io/fedora/fedora-bootc:44 \
+            quay.io/fedora/fedora-bootc:latest \
             bash /build/${{ matrix.package }}/build.sh
 
       - name: Verify RPM
@@ -171,7 +171,7 @@ jobs:
       - name: Checkout website repo
         uses: actions/checkout@v6
         with:
-          repository: ferret-project/ferret-project.github.io
+          repository: ferret-linux/ferret-linux.github.io
           token: ${{ secrets.WEBSITE_REPO_PAT }}
           path: website
 
@@ -195,7 +195,7 @@ jobs:
           TMPDIR=$(mktemp -d)
           cp all-rpms/*.rpm "$TMPDIR/"
           createrepo_c \
-            --baseurl "https://github.com/ferret-project/packages/releases/download/pkgs-rpm/" \
+            --baseurl "https://github.com/ferret-linux/packages/releases/download/pkgs-rpm/" \
             "$TMPDIR"
 
           # Only copy repodata (no RPMs) into website repo

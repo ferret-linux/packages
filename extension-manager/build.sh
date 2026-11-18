@@ -27,6 +27,7 @@ dnf install -y \
     git \
     blueprint-compiler \
     gtk4-devel \
+    glycin-gtk4-devel \
     libadwaita-devel \
     json-glib-devel \
     libsoup3-devel \
