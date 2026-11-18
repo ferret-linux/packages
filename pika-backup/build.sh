@@ -66,6 +66,19 @@ git clone --depth 1 --branch "$TAG" \
     "$WORKDIR/src"
 ok "Source cloned"
 
+# 3b — OpenSSL 4.0 in the buildroot
+# -----------------------------------------------------------------------------
+# Fedora 45 ships OpenSSL 4.0. The openssl-sys pinned in pika-backup's
+# Cargo.lock predates 4.x and aborts its build script ("only compatible with
+# OpenSSL 1.1.0, 1.1.1, or 3.x"). openssl 0.10.82 / openssl-sys 0.9.118 are the
+# pair that gained 4.x support, so bump exactly those two entries in the lock
+# file and leave every other dependency untouched.
+info "Updating openssl crates for OpenSSL 4.x..."
+( cd "$WORKDIR/src" && \
+  cargo update -p openssl --precise 0.10.82 && \
+  cargo update -p openssl-sys --precise 0.9.118 )
+ok "openssl crates updated"
+
 # 4 — Build
 # =============================================================================
 info "Configuring with meson..."
