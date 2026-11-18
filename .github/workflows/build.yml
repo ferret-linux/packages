@@ -72,6 +72,7 @@ jobs:
           - wm-noctalia
           - gnome-shell-extensions
           - udev-rules
+          - git-cinnabar
           - pika-backup
           - extension-manager
           - nvidia-container-toolkit
