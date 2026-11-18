@@ -32,9 +32,15 @@ ok "Dependencies installed"
 
 # 2 — Detect latest incus-ui-canonical tag
 # =============================================================================
+# Tags are read over git rather than the REST API: unauthenticated API calls
+# from shared CI runners are rate limited (403). sort -V also makes this
+# deterministic instead of relying on API tag ordering.
 info "Detecting latest incus-ui-canonical tag..."
-VERSION=$(curl -sf "https://api.github.com/repos/${GITHUB_REPO}/tags?per_page=1" \
-    | grep -oP '"name":\s*"incus-\K[^"]+' | head -1)
+VERSION="$(git ls-remote --tags "https://github.com/${GITHUB_REPO}.git" \
+    | sed 's|.*refs/tags/||' \
+    | grep '^incus-' | grep -v '\^{}' \
+    | sed 's/^incus-//' \
+    | sort -V | tail -1)"
 
 [[ -n "$VERSION" ]] || die "Failed to detect latest UI version"
 ok "Version: $VERSION"
