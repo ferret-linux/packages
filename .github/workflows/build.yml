@@ -179,12 +179,18 @@ jobs:
       - name: Install createrepo
         run: sudo apt-get install -y createrepo-c
 
-      - name: Download all RPMs
-        uses: actions/download-artifact@v6
-        with:
-          pattern: rpms-*
-          path: all-rpms
-          merge-multiple: true
+      - name: Download published RPMs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Download from the release rather than from the build artifacts:
+          # GitHub normalizes uploaded asset names (e.g. `~` becomes `.`), so
+          # repodata built from local filenames would point at URLs that 404.
+          mkdir -p all-rpms
+          gh release download pkgs-rpm \
+            --repo "${{ github.repository }}" \
+            --pattern '*.rpm' \
+            --dir all-rpms
 
       - name: Update repodata
         run: |
