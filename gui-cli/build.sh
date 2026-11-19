@@ -50,6 +50,7 @@ info "Downloading packages from Terra..."
 dnf download \
     scx-scheds scx-tools brave-origin brave-keyring code starship heroic-games-launcher protonplus hack-nerd-fonts nerdfontssymbolsonly-nerd-fonts \
     ghostty ghostty-nautilus ghostty-zsh-completion ghostty-terminfo ghostty-shell-integration ghostty-bat-syntax ghostty-neovim ghostty-kio noctalia-greeter \
+    yazi zen-browser \
     --destdir /output \
     --arch x86_64 --arch noarch \
     -q

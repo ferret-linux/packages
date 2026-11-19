@@ -1,10 +1,9 @@
 #!/bin/bash
 # =============================================================================
-#  git-cinnabar/build.sh
+#  lazydocker/build.sh
 #
-#  Upstream ships official Linux x86_64 release tarballs, so this wraps that
-#  binary in a proper RPM. Fedora dropped the git-cinnabar package in 45, and
-#  the dx image needs it back.
+#  Fedora doesn't package lazydocker, so wrap upstream's official Linux
+#  x86_64 release binary in a small RPM.
 # =============================================================================
 set -euo pipefail
 
@@ -15,86 +14,80 @@ die()  { echo "[✗] $*" >&2; exit 1; }
 rm -rf /root
 mkdir -p /root/
 
-WORKDIR=/tmp/git-cinnabar-build
+WORKDIR=/tmp/lazydocker-build
 RPMBUILD="$WORKDIR/rpmbuild"
 rm -rf "$WORKDIR"
 mkdir -p "$WORKDIR"
 
-UPSTREAM="glandium/git-cinnabar"
-ASSET="git-cinnabar.linux.x86_64.tar.xz"
+UPSTREAM="jesseduffield/lazydocker"
 
 # 1 — Build dependencies
 # =============================================================================
 info "Installing build dependencies..."
 dnf install -y --setopt=install_weak_deps=False -q \
-    curl xz rpm-build
+    curl tar gzip rpm-build
 ok "Dependencies installed"
 
-# 2 — Resolve the latest release tag without the rate-limited REST API
+# 2 — Resolve + download the latest release
 # =============================================================================
-info "Detecting latest git-cinnabar release..."
+info "Detecting latest lazydocker release..."
 TAG="$(curl -fsSI -o /dev/null -w '%{redirect_url}' \
     "https://github.com/${UPSTREAM}/releases/latest" \
     | sed 's#.*/tag/##')"
-[[ -n "$TAG" ]] || die "Could not detect latest git-cinnabar release"
+[[ -n "$TAG" ]] || die "Could not detect latest lazydocker release"
 VERSION="${TAG#v}"
 ok "Version: $VERSION"
 
-# 3 — Download the upstream binary
-# =============================================================================
+ASSET="lazydocker_${VERSION}_Linux_x86_64.tar.gz"
 info "Downloading ${ASSET}..."
 curl -fLsS -o "$WORKDIR/$ASSET" \
     "https://github.com/${UPSTREAM}/releases/download/${TAG}/${ASSET}"
-tar -xf "$WORKDIR/$ASSET" -C "$WORKDIR"
-BINARY="$WORKDIR/git-cinnabar/git-cinnabar"
-[[ -x "$BINARY" ]] || die "git-cinnabar binary not found in release tarball"
-"$BINARY" --version >/dev/null || die "Downloaded git-cinnabar does not run"
+mkdir -p "$WORKDIR/unpacked"
+tar -xzf "$WORKDIR/$ASSET" -C "$WORKDIR/unpacked"
+BINARY="$(find "$WORKDIR/unpacked" -type f -name lazydocker -print -quit)"
+[[ -x "$BINARY" ]] || die "lazydocker binary not found in release tarball"
+"$BINARY" --version >/dev/null 2>&1 || "$BINARY" version >/dev/null 2>&1 \
+    || die "Downloaded lazydocker does not run"
 ok "Upstream binary verified"
 
-# 4 — Build RPM
+# 3 — Build RPM
 # =============================================================================
 info "Building RPM..."
 mkdir -p "$RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+cp "$BINARY" "$RPMBUILD/SOURCES/lazydocker"
 
-cat > "$RPMBUILD/SPECS/git-cinnabar.spec" <<SPEC
-Name:           git-cinnabar
+cat > "$RPMBUILD/SPECS/lazydocker.spec" <<SPEC
+Name:           lazydocker
 Version:        ${VERSION}
 Release:        1%{?dist}
-Summary:        Git remote helper for Mercurial repositories
-License:        GPL-2.0-only
+Summary:        Simple terminal UI for Docker and docker-compose
+License:        MIT
 URL:            https://github.com/${UPSTREAM}
-# Upstream also ships this name; install one or the other, not both.
-Conflicts:      git-remote-hg
-Provides:       git-remote-hg = %{version}-%{release}
-Source0:        %{name}
+Source0:        lazydocker
 BuildArch:      x86_64
 
 %description
-git-cinnabar is a git remote helper for Mercurial repositories. It lets git
-clone, fetch and push from Mercurial remotes using the git-cinnabar protocol.
+lazydocker is a simple terminal UI for both docker and docker-compose,
+written in Go with the gocui library.
 
 %install
 mkdir -p %{buildroot}%{_bindir}
-install -m 0755 %{SOURCE0} %{buildroot}%{_bindir}/git-cinnabar
-ln -s git-cinnabar %{buildroot}%{_bindir}/git-remote-hg
+install -m 0755 %{SOURCE0} %{buildroot}%{_bindir}/lazydocker
 
 %files
-%{_bindir}/git-cinnabar
-%{_bindir}/git-remote-hg
+%{_bindir}/lazydocker
 
 %changelog
 * %(date "+%a %b %d %Y") Ferret Linux <ferret-linux> - %{version}-1
 - Package upstream ${VERSION} Linux x86_64 release binary
 SPEC
 
-cp "$BINARY" "$RPMBUILD/SOURCES/git-cinnabar"
-
 rpmbuild \
     --define "_topdir $RPMBUILD" \
-    -bb "$RPMBUILD/SPECS/git-cinnabar.spec" 2>&1 \
+    -bb "$RPMBUILD/SPECS/lazydocker.spec" 2>&1 \
     | grep -vE '^(warning: )?(%source_date_epoch_from_changelog|Wrote:)' || true
 
-RPM_FILE="$(find "$RPMBUILD/RPMS" -name 'git-cinnabar-*.rpm' | head -1)"
+RPM_FILE="$(find "$RPMBUILD/RPMS" -name 'lazydocker-*.rpm' -print -quit)"
 [[ -f "$RPM_FILE" ]] || die "RPM not found after build"
 
 cp "$RPM_FILE" /output/
