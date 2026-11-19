@@ -140,26 +140,42 @@ jobs:
           [[ "$(ls all-rpms/*.rpm 2>/dev/null | wc -l)" -gt 0 ]] \
             || { echo "No RPMs found"; exit 1; }
 
-      - name: Delete existing release and tag
+      - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete "pkgs-rpm" \
-            --repo ${{ github.repository }} \
-            --yes \
-            --cleanup-tag \
-            || true
+          if ! gh release view "pkgs-rpm" \
+              --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release create "pkgs-rpm" \
+              --repo "${{ github.repository }}" \
+              --title "pkgs-rpm" \
+              --latest=false \
+              --notes "**built:** \`$(date -u '+%Y-%m-%d %H:%M UTC')\`" \
+              all-rpms/*.rpm
+            exit 0
+          fi
 
-      - name: Create release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create "pkgs-rpm" \
-            --repo ${{ github.repository }} \
-            --title "pkgs-rpm" \
-            --latest=false \
-            --notes "**built:** \`$(date -u '+%Y-%m-%d %H:%M UTC')\`" \
-            all-rpms/*.rpm
+          # A published NVR is immutable. Rebuilding the same NVR produces
+          # different bytes (rpm records the build time), and re-uploading it
+          # while the website repodata still describes the old bytes makes
+          # every image build fail with "checksum doesn't match" until Pages
+          # catches up. Keep the already-published asset and only upload
+          # genuinely new NVRs, so repodata only changes when a package is
+          # actually updated.
+          gh release view "pkgs-rpm" \
+            --repo "${{ github.repository }}" \
+            --json assets --jq '.assets[].name' > /tmp/published-assets.txt
+
+          for rpm in all-rpms/*.rpm; do
+            base="$(basename "$rpm")"
+            if grep -qxF "${base}" /tmp/published-assets.txt; then
+              echo "keeping published ${base}"
+              continue
+            fi
+            echo "uploading ${base}"
+            gh release upload "pkgs-rpm" "$rpm" \
+              --repo "${{ github.repository }}"
+          done
 
   update-repo:
     name: Update DNF repo metadata
