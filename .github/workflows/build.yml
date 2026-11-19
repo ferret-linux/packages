@@ -152,7 +152,7 @@ jobs:
               set -e
               dnf install -y -q rpm-sign >/dev/null
               printf "%s\n" "$RPM_GPG_PRIVATE_KEY" | gpg --batch --import
-              # Vendor RPMs (e.g. NVIDIA's) may carry a legacy signature that
+              # Vendor RPMs (e.g. NVIDIA) may carry a legacy signature that
               # rpm --addsign refuses to coexist with. Strip first, then sign
               # every RPM with our key only.
               for f in /rpms/*.rpm; do
