@@ -28,7 +28,7 @@ on:
   workflow_dispatch:
     inputs:
       force_packages:
-        description: "Comma-separated package names to rebuild even if their NVR is already published"
+        description: "Comma-separated package names to rebuild even if their RPMs are already published"
         required: false
         default: ""
 
@@ -65,11 +65,16 @@ jobs:
     outputs:
       matrix: ${{ steps.resolve.outputs.matrix }}
       any: ${{ steps.resolve.outputs.any }}
+      expected_all: ${{ steps.resolve.outputs.expected_all }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Resolve packages to build
+      # --print-nvr runs the same version-detection code as the real build,
+      # inside the same container. If any probe fails, this job fails and all
+      # downstream jobs (build/publish/prune/update-repo) are skipped — no
+      # incomplete expected set can ever reach the prune step.
+      - name: Probe expected RPMs and resolve build matrix
         id: resolve
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -78,102 +83,77 @@ jobs:
         run: |
           set -euo pipefail
 
-          PACKAGES=(
-            helium-drm
-            gui-cli
-            docker-ce
-            fedora-logos
-            plasma-lookandfeel-fedora
-            zutils-rs
-            resources
-            pods
-            incus-ui
-            wm-noctalia
-            gnome-shell-extensions
-            udev-rules
-            prime-run
-            lazydocker
-            mise
-            pika-backup
-            extension-manager
-            nvidia-container-toolkit
-            brew-helpers
-            nerdctl
-          )
+          if gh release view pkgs-rpm --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release view pkgs-rpm --repo "$GITHUB_REPOSITORY" \
+              --json assets --jq '.assets[].name' > /tmp/published.txt
+          else
+            : > /tmp/published.txt
+          fi
+          echo "published assets: $(wc -l < /tmp/published.txt)"
 
-          declare -A FORCE=()
+          : > /tmp/force.txt
           FORCE_LIST="${INPUT_FORCE_PACKAGES:-},${FORCE_BUILD_PACKAGES:-}"
           IFS=',' read -ra _parts <<< "$FORCE_LIST"
           for p in "${_parts[@]}"; do
             p="$(printf '%s' "$p" | tr -d '[:space:]')"
-            [[ -n "$p" ]] && FORCE["$p"]=1
+            [[ -n "$p" ]] && printf '%s\n' "$p" >> /tmp/force.txt
           done
 
-          ASSETS="$(gh release view pkgs-rpm --repo "$GITHUB_REPOSITORY" \
-            --json assets --jq '.assets[].name' 2>/dev/null || true)"
-          DIST=""
-          if [[ -n "$ASSETS" ]]; then
-            DIST="$(printf '%s\n' "$ASSETS" \
-              | sed -nE 's/.*\.(fc[0-9]+)\.x86_64\.rpm$/\1/p' \
-              | head -1)"
-          fi
-          echo "published dist: ${DIST:-none}"
+          PROBE_DIR="$(mktemp -d)"
+          mkdir -p "$PROBE_DIR/output"
+          trap 'rm -rf "$PROBE_DIR"' EXIT
 
-          INCLUDE=()
-          SKIPPED=()
-          declare -A NVR=()
-          for pkg in "${PACKAGES[@]}"; do
-            script="$pkg/version.sh"
-            if [[ ! -f "$script" ]]; then
-              INCLUDE+=("$pkg")
-              continue
-            fi
+          docker run --rm \
+            -e GITHUB_TOKEN \
+            -v "$GITHUB_WORKSPACE:/repo:ro" \
+            -v "$PROBE_DIR/output:/output" \
+            -v "$PROBE_DIR:/probe" \
+            quay.io/fedora/fedora-bootc:latest \
+            bash /repo/.github/scripts/probe.sh /probe/results.tsv
 
-            nvr="$(bash "$script")"
-            [[ -n "$nvr" ]] || { echo "empty NVR from $script" >&2; exit 1; }
-            NVR["$pkg"]="$nvr"
+          [[ -s "$PROBE_DIR/results.tsv" ]] || { echo "no packages were probed" >&2; exit 1; }
 
-            expected="${nvr}${DIST:+.${DIST}}.x86_64.rpm"
-            if [[ -n "$DIST" && -z "${FORCE[$pkg]:-}" ]] \
-              && printf '%s\n' "$ASSETS" | grep -qxF "$expected"; then
-              SKIPPED+=("$pkg ($expected)")
-              continue
-            fi
-            INCLUDE+=("$pkg")
-          done
-
-          echo "skipped:"
-          if ((${#SKIPPED[@]})); then printf '  %s\n' "${SKIPPED[@]}"; else echo "  none"; fi
-          echo "building:"
-          if ((${#INCLUDE[@]})); then printf '  %s\n' "${INCLUDE[@]}"; else echo "  none"; fi
-
-          TSV="$(mktemp)"
-          trap 'rm -f "$TSV"' EXIT
-          for pkg in "${INCLUDE[@]}"; do
-            printf '%s\t%s\n' "$pkg" "${NVR[$pkg]:-}" >> "$TSV"
-          done
-
-          MATRIX_JSON="$(python3 - "$TSV" "$DIST" <<'PY'
+          python3 - /tmp/published.txt /tmp/force.txt "$PROBE_DIR/results.tsv" "$GITHUB_OUTPUT" <<'PY'
           import json
           import sys
 
-          rows = []
-          with open(sys.argv[1]) as fh:
-              for line in fh:
-                  package, nvr = line.rstrip("\n").split("\t", 1)
-                  rows.append({"package": package, "nvr": nvr, "dist": sys.argv[2]})
-          print(json.dumps({"include": rows}))
-          PY
-          )"
+          published_path, force_path, tsv_path, out_path = sys.argv[1:5]
 
-          {
-            echo "matrix=$MATRIX_JSON"
-            if ((${#INCLUDE[@]} > 0)); then
-              echo "any=true"
-            else
-              echo "any=false"
-            fi
-          } >> "$GITHUB_OUTPUT"
+          with open(published_path) as fh:
+              published = {line.strip() for line in fh if line.strip()}
+          with open(force_path) as fh:
+              forced = {line.strip() for line in fh if line.strip()}
+
+          rows = []
+          all_expected = []
+          skipped = []
+          building = []
+
+          with open(tsv_path) as fh:
+              for line in fh:
+                  fields = line.rstrip("\n").split("\t")
+                  pkg = fields[0]
+                  expected = [name for name in fields[1:] if name]
+                  all_expected.extend(expected)
+
+                  missing = [name for name in expected if name not in published]
+                  if pkg in forced or missing:
+                      building.append(pkg)
+                      rows.append({"package": pkg, "expected": expected})
+                  else:
+                      skipped.append(pkg)
+
+          print("skipped:")
+          print("  " + ("\n  ".join(skipped) if skipped else "none"))
+          print("building:")
+          print("  " + ("\n  ".join(building) if building else "none"))
+          print(f"live expected RPMs: {len(all_expected)}")
+
+          with open(out_path, "a") as out:
+              out.write("matrix=" + json.dumps({"include": rows}) + "\n")
+              out.write("any=" + ("true" if rows else "false") + "\n")
+              out.write("expected_all=" + json.dumps(all_expected) + "\n")
+          PY
 
   build:
     name: Build ${{ matrix.package }}
@@ -203,31 +183,39 @@ jobs:
             quay.io/fedora/fedora-bootc:latest \
             bash /build/${{ matrix.package }}/build.sh
 
-      - name: Verify RPM
+      - name: Verify RPMs
         run: |
           ls -lh output/${{ matrix.package }}/
-          [[ "$(ls output/${{ matrix.package }}/*.rpm 2>/dev/null | wc -l)" -gt 0 ]] \
+          [[ "$(find output/${{ matrix.package }} -maxdepth 1 -name '*.rpm' | wc -l)" -gt 0 ]] \
             || { echo "No RPMs found"; exit 1; }
 
       - name: Sanitize RPM filenames
-        run: |
-          for rpm in output/${{ matrix.package }}/*.rpm; do
-            clean="$(dirname "$rpm")/$(basename "$rpm" \
-              | sed 's/^[0-9]*://' \
-              | sed 's/-[0-9]*:/-/' \
-              | sed 's/\^/-/g')"
-            [[ "$rpm" != "$clean" ]] && mv "$rpm" "$clean" || true
-          done
+        run: bash .github/scripts/sanitize.sh "output/${{ matrix.package }}"
 
-      - name: Assert expected NVR
-        if: matrix.nvr != '' && matrix.dist != ''
+      # Exact set: a missing RPM means the probe and the build disagree (a
+      # package changed shape upstream, or detection is broken). An extra RPM
+      # would be uploaded and then immediately pruned, so fail here instead.
+      - name: Assert exact expected RPM set
+        env:
+          EXPECTED_JSON: ${{ toJson(matrix.expected) }}
         run: |
-          expected="${{ matrix.nvr }}.${{ matrix.dist }}.x86_64.rpm"
-          [[ -f "output/${{ matrix.package }}/$expected" ]] || {
-            echo "Expected $expected but build produced:" >&2
-            ls -1 output/${{ matrix.package }}/ >&2
-            exit 1
-          }
+          python3 - "$EXPECTED_JSON" "output/${{ matrix.package }}" <<'PY'
+          import json
+          import os
+          import sys
+
+          expected = set(json.loads(sys.argv[1]))
+          directory = sys.argv[2]
+          actual = {name for name in os.listdir(directory) if name.endswith(".rpm")}
+
+          missing = sorted(expected - actual)
+          extra = sorted(actual - expected)
+          if missing or extra:
+              print("missing RPMs:", missing, file=sys.stderr)
+              print("extra RPMs:", extra, file=sys.stderr)
+              sys.exit(1)
+          print("exact RPM set verified:", sorted(actual))
+          PY
 
       - name: Upload artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -239,7 +227,7 @@ jobs:
   publish:
     name: Publish release
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, resolve]
     permissions:
       contents: write
 
@@ -255,7 +243,7 @@ jobs:
         run: |
           echo "All RPMs:"
           ls -lh all-rpms/
-          [[ "$(ls all-rpms/*.rpm 2>/dev/null | wc -l)" -gt 0 ]] \
+          [[ "$(find all-rpms -maxdepth 1 -name '*.rpm' | wc -l)" -gt 0 ]] \
             || { echo "No RPMs found"; exit 1; }
 
       - name: Sign RPMs
@@ -265,7 +253,7 @@ jobs:
           docker run --rm \
             -e RPM_GPG_PRIVATE_KEY \
             -v "${{ github.workspace }}/all-rpms:/rpms" \
-            quay.io/fedora/fedora:45 \
+            quay.io/fedora/fedora:latest \
             bash -c '
               set -e
               dnf install -y -q rpm-sign >/dev/null
@@ -326,6 +314,47 @@ jobs:
             gh release upload "pkgs-rpm" "$rpm" \
               --repo "${{ github.repository }}"
           done
+
+      # Pure GitHub set difference. `expected_all` is the union of every
+      # --print-nvr result from resolve (including packages that were skipped),
+      # so it is the complete live RPM set for this run. Anything else in the
+      # release is a superseded version from an earlier run.
+      - name: Prune superseded release assets
+        if: ${{ vars.PRUNE_ORPHANS != 'false' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECTED_JSON: ${{ needs.resolve.outputs.expected_all }}
+          PRUNE_ORPHANS: ${{ vars.PRUNE_ORPHANS }}
+        run: |
+          set -euo pipefail
+          [[ "${PRUNE_ORPHANS:-}" == "false" ]] && { echo "PRUNE_ORPHANS=false — skipping"; exit 0; }
+
+          python3 - "$EXPECTED_JSON" > /tmp/keep.txt <<'PY'
+          import json
+          import sys
+          for name in json.loads(sys.argv[1]):
+              print(name)
+          PY
+
+          gh release view "pkgs-rpm" \
+            --repo "${{ github.repository }}" \
+            --json assets --jq '.assets[].name' \
+            | grep '\.rpm$' > /tmp/published.txt || true
+
+          comm -13 <(sort -u /tmp/keep.txt) <(sort -u /tmp/published.txt) > /tmp/extra.txt
+
+          if [[ ! -s /tmp/extra.txt ]]; then
+            echo "no superseded assets"
+            exit 0
+          fi
+
+          echo "pruning superseded assets:"
+          cat /tmp/extra.txt
+          while IFS= read -r asset; do
+            [[ -n "$asset" ]] || continue
+            gh release delete-asset "pkgs-rpm" "$asset" \
+              --repo "${{ github.repository }}" --yes
+          done < /tmp/extra.txt
 
   update-repo:
     name: Update DNF repo metadata
