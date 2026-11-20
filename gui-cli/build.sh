@@ -34,13 +34,13 @@ echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com
 # =============================================================================
 if (( NVR_MODE )); then
     emit_dnf_urls bazaar topgrade morewaita-icon-theme
+else
+    info "Downloading packages from COPR..."
+    dnf download bazaar topgrade morewaita-icon-theme \
+        --destdir /output \
+        --arch x86_64 --arch noarch \
+        -q
 fi
-
-info "Downloading packages from COPR..."
-dnf download bazaar topgrade morewaita-icon-theme \
-    --destdir /output \
-    --arch x86_64 --arch noarch \
-    -q
 
 dnf copr disable -y lilay/topgrade
 dnf copr disable -y ublue-os/packages
