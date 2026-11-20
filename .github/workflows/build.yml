@@ -74,6 +74,7 @@ jobs:
           - udev-rules
           - prime-run
           - lazydocker
+          - mise
           - pika-backup
           - extension-manager
           - nvidia-container-toolkit
