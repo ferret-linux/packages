@@ -173,10 +173,10 @@ jobs:
         run: |
           docker run --rm \
             -e GITHUB_TOKEN \
-            -v "${{ github.workspace }}/${{ matrix.package }}:/build/${{ matrix.package }}:ro" \
+            -v "${{ github.workspace }}:/repo:ro" \
             -v "${{ github.workspace }}/output/${{ matrix.package }}:/output" \
             quay.io/fedora/fedora-bootc:latest \
-            bash /build/${{ matrix.package }}/build.sh
+            bash /repo/${{ matrix.package }}/build.sh
 
       - name: Verify RPMs
         run: |
