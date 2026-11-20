@@ -37,10 +37,16 @@ info "Enabling Google Chrome repo..."
 dnf config-manager setopt google-chrome.enabled=1
 
 if (( NVR_MODE )); then
-    HELIUM_URL="$(dnf download --url helium-bin 2>/dev/null | head -1)"
-    HELIUM_FILE="${HELIUM_URL##*/}"
-    HELIUM_FILE="${HELIUM_FILE%%\?*}"
-    [[ "$HELIUM_FILE" == helium-bin-*.rpm ]] || die "Could not resolve helium-bin RPM: $HELIUM_FILE"
+    # The COPR exposes both a .src.rpm and the binary RPM; --url may list the
+    # source first. Pick the x86_64 binary explicitly so the probe matches the
+    # x86_64 RPM the real build produces from the installed helium-bin.
+    HELIUM_FILE="$(
+        dnf download --url --arch x86_64 helium-bin 2>/dev/null \
+            | sed 's/[?].*$//' \
+            | awk -F/ '$NF ~ /^helium-bin-.*\.rpm$/ && $NF !~ /\.src\.rpm$/ { print $NF; exit }'
+    )"
+    [[ -n "$HELIUM_FILE" ]] || die "Could not resolve helium-bin binary RPM"
+    HELIUM_FILE="$(sanitize_rpm_name "$HELIUM_FILE")"
     emit_raw_nvr "helium-drm-${HELIUM_FILE#helium-bin-}"
     nvr_done
 fi

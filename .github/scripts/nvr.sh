@@ -54,6 +54,10 @@ emit_dnf_urls() {
         [[ -n "$url" ]] || continue
         name="${url##*/}"
         name="${name%%\?*}"
+        # dnf5 stores an epoch as "-0-" on disk while --url prints "-0:"
+        # ("foo-0:1.2-3..." becomes "foo-0-1.2-3..."). Mirror that spelling so
+        # the probe predicts the exact filename the real dnf download writes.
+        name="$(printf '%s' "$name" | sed -E 's/-([0-9]+):/-\1-/')"
         _nvr_emit "$name"
     done < <(dnf download --url --arch x86_64 --arch noarch "$@" 2>/dev/null)
 }
