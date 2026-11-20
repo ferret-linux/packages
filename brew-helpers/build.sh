@@ -12,6 +12,7 @@ rm -rf /root
 mkdir -p /root/
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/version.sh"
 WORKDIR="$(mktemp -d /tmp/brew-helpers-build.XXXXXX)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
@@ -66,9 +67,9 @@ ok "Helper scripts staged"
 # 4 — Inline spec
 # =============================================================================
 cat > "$RPMBUILD/SPECS/brew-helpers.spec" <<SPEC
-Name:           brew-helpers
-Version:        1.0
-Release:        1.mink%{?dist}
+Name:           ${NAME}
+Version:        ${VERSION}
+Release:        ${RELEASE}%{?dist}
 Summary:        Tiny Homebrew lifecycle helpers for mink-os
 License:        MIT
 URL:            https://brew.sh
@@ -111,7 +112,7 @@ install -Dm644 %{SOURCE6} %{buildroot}/usr/share/fish/vendor_completions.d/brew.
 /usr/share/fish/vendor_completions.d/brew.fish
 
 %changelog
-* $(date '+%a %b %d %Y') packages <actions@github.com> - 1.0-1
+* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-${RELEASE}
 - Automated build
 SPEC
 

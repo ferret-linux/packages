@@ -11,6 +11,7 @@ die()  { echo "[✗] $*" >&2; exit 1; }
 rm -rf /root
 mkdir -p /root/
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKDIR="$(mktemp -d /tmp/nerdctl-build.XXXXXX)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
@@ -21,25 +22,18 @@ dnf install -y --setopt=install_weak_deps=False -q \
     rpm-build curl coreutils
 ok "Build dependencies installed"
 
+info "Resolving upstream release..."
+source "$SCRIPT_DIR/version.sh"
+VER="$VERSION"
+TAG="v${VER}"
+ok "nerdctl tag: $TAG (version $VER)"
+
 RPMBUILD="$WORKDIR/rpmbuild"
 SOURCES="$RPMBUILD/SOURCES"
 mkdir -p "$RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
 # 2 — Detect latest upstream release
 # =============================================================================
-CURL_AUTH=()
-[[ -n "${GITHUB_TOKEN:-}" ]] && CURL_AUTH=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-
-info "Detecting latest containerd/nerdctl release..."
-TAG="$(curl -fsSL "${CURL_AUTH[@]}" \
-    -H 'Accept: application/vnd.github+json' \
-    https://api.github.com/repos/containerd/nerdctl/releases/latest \
-    | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-    | head -1)"
-[[ -n "$TAG" ]] || die "Failed to detect nerdctl release tag"
-VER="${TAG#v}"
-[[ -n "$VER" && "$VER" != "$TAG" ]] || die "Unexpected nerdctl tag format: $TAG"
-ok "nerdctl tag: $TAG (version $VER)"
 
 # 3 — Download and verify upstream binary tarball
 # =============================================================================
