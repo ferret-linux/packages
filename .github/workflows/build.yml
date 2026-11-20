@@ -71,13 +71,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # --print-nvr runs the same version-detection code as the real build,
-      # inside the same container. If any probe fails, this job fails and all
+      # in the same clean container. If any probe fails, this job fails and all
       # downstream jobs (build/publish/prune/update-repo) are skipped — no
       # incomplete expected set can ever reach the prune step.
       - name: Probe expected RPMs and resolve build matrix
         id: resolve
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORCE_BUILD_PACKAGES: ${{ vars.FORCE_BUILD_PACKAGES }}
           INPUT_FORCE_PACKAGES: ${{ github.event.inputs.force_packages }}
         run: |
@@ -100,16 +101,10 @@ jobs:
           done
 
           PROBE_DIR="$(mktemp -d)"
-          mkdir -p "$PROBE_DIR/output"
           trap 'rm -rf "$PROBE_DIR"' EXIT
 
-          docker run --rm \
-            -e GITHUB_TOKEN \
-            -v "$GITHUB_WORKSPACE:/repo:ro" \
-            -v "$PROBE_DIR/output:/output" \
-            -v "$PROBE_DIR:/probe" \
-            quay.io/fedora/fedora-bootc:latest \
-            bash /repo/.github/scripts/probe.sh /probe/results.tsv
+          REPO="$GITHUB_WORKSPACE" \
+            bash .github/scripts/probe.sh "$PROBE_DIR/results.tsv"
 
           [[ -s "$PROBE_DIR/results.tsv" ]] || { echo "no packages were probed" >&2; exit 1; }
 

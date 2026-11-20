@@ -2,11 +2,14 @@
 # =============================================================================
 #  probe.sh — ask every build.sh for the exact RPMs it would produce
 #
-#  Runs INSIDE quay.io/fedora/fedora-bootc:latest. Each package's build.sh is
-#  invoked with --print-nvr, which performs only its upstream version detection
-#  and then exits before compiling/packaging. That keeps probe and build on the
-#  exact same code path — there is no second version-detection implementation
-#  that could drift out of sync.
+#  Runs on the host. Each package's build.sh is invoked with --print-nvr inside
+#  a FRESH build container — the same image and the same clean environment the
+#  real build job uses. This matters: build scripts enable repos and install
+#  packages, so sharing one container across packages would leak state.
+#
+#  --print-nvr performs only upstream version detection and exits before
+#  compiling/packaging. Probe and build therefore share one code path, with no
+#  second version-detection implementation that could drift out of sync.
 #
 #  Output TSV (one line per package):
 #      <package>\t<expected-rpm-1>\t<expected-rpm-2>...
@@ -14,14 +17,16 @@
 set -euo pipefail
 
 OUT="${1:?usage: probe.sh <results.tsv> [pkg ...]}"
-REPO="${REPO:-/repo}"
 shift
+
+REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+IMAGE="${BUILD_IMAGE:-quay.io/fedora/fedora-bootc:latest}"
 : > "$OUT"
-mkdir -p /output
 
 for script in "$REPO"/*/build.sh; do
     [[ -f "$script" ]] || continue
     pkg="$(basename "$(dirname "$script")")"
+
     if (($# > 0)); then
         match=0
         for wanted in "$@"; do
@@ -30,23 +35,29 @@ for script in "$REPO"/*/build.sh; do
         (( match )) || continue
     fi
 
-    # /output is throwaway for probes, but each package must start clean so a
-    # directory-listing probe (e.g. docker-ce) only sees its own downloads.
-    rm -f /output/*.rpm
+    tmp="$(mktemp -d)"
+    mkdir -p "$tmp/output"
 
-    expected_file="$(mktemp)"
-    NVR_OUTFILE="$expected_file" bash "$script" --print-nvr >/dev/null
-    [[ -s "$expected_file" ]] || {
+    docker run --rm \
+        -e GITHUB_TOKEN \
+        -e NVR_OUTFILE=/probe/nvr.txt \
+        -v "$REPO:/repo:ro" \
+        -v "$tmp:/probe" \
+        -v "$tmp/output:/output" \
+        "$IMAGE" \
+        bash "/repo/$pkg/build.sh" --print-nvr >/dev/null
+
+    [[ -s "$tmp/nvr.txt" ]] || {
         echo "probe produced no expected RPMs for $pkg" >&2
-        rm -f "$expected_file"
+        rm -rf "$tmp"
         exit 1
     }
 
     names=()
     while IFS= read -r line; do
         [[ -n "$line" ]] && names+=("$line")
-    done < "$expected_file"
-    rm -f "$expected_file"
+    done < "$tmp/nvr.txt"
+    rm -rf "$tmp"
 
     printf '%s' "$pkg" >> "$OUT"
     for name in "${names[@]}"; do
