@@ -9,6 +9,12 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
+NAME=gnome-shell-extensions
+RELEASE=1.mink
+
 EGO_BASE="https://extensions.gnome.org"
 ROOT_WORKDIR="/tmp/gnome-shell-extensions-build"
 OUTPUT_DIR="/output"
@@ -19,8 +25,10 @@ ok()   { echo "[✓] $*"; }
 warn() { echo "[!] $*" >&2; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 # =============================================================================
 # Extension list: pk:rpm_name:license
@@ -48,14 +56,18 @@ EXTENSIONS=(
 # 0 — Install build dependencies (once, shared across all extensions)
 # =============================================================================
 info "Installing build dependencies..."
-dnf install -y \
-    glib2-devel \
-    gettext \
-    rpm-build \
-    unzip \
-    jq \
-    curl \
-    --setopt=install_weak_deps=False -q
+if (( NVR_MODE )); then
+    dnf install -y jq curl --setopt=install_weak_deps=False -q
+else
+    dnf install -y \
+        glib2-devel \
+        gettext \
+        rpm-build \
+        unzip \
+        jq \
+        curl \
+        --setopt=install_weak_deps=False -q
+fi
 ok "Dependencies installed"
 
 # =============================================================================
@@ -113,6 +125,11 @@ build_extension() {
         return 1
     fi
     ok "Latest extension version: $VERSION"
+
+    if (( NVR_MODE )); then
+        emit_nvr "gnome-shell-extension-${RPM_NAME}" "$VERSION" "$RELEASE" "noarch"
+        return 0
+    fi
 
     local VERSION_TAG
     VERSION_TAG=$(jq -r --argjson v "$VERSION" \
@@ -264,7 +281,7 @@ build_extension() {
     cat > "$RPMBUILD/SPECS/gnome-shell-extension-${RPM_NAME}.spec" <<SPEC
 Name:           gnome-shell-extension-${RPM_NAME}
 Version:        ${VERSION}
-Release:        1%{?dist}
+Release:        ${RELEASE}%{?dist}
 Summary:        ${NAME}
 License:        ${LICENSE}
 BuildArch:      noarch
@@ -282,7 +299,7 @@ cp -a "${STAGING}/." "%{buildroot}/"
 ${FILES_LIST}
 
 %changelog
-* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-1
+* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-${RELEASE}
 - Automated build from extensions.gnome.org (pk=${PK}, version=${VERSION})
 SPEC
 
@@ -321,6 +338,8 @@ for entry in "${EXTENSIONS[@]}"; do
         FAILED+=("$rpm_name")
     fi
 done
+
+nvr_done
 
 # 6 — Sanitize filenames in /output (strip RPM epoch/version chars that
 #     aren't filesystem-friendly, e.g. ':' from epoch, '^' from pre-release)

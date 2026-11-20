@@ -4,12 +4,20 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
+NAME=nerdctl
+RELEASE=1.mink
+
 info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKDIR="$(mktemp -d /tmp/nerdctl-build.XXXXXX)"
@@ -18,15 +26,29 @@ trap 'rm -rf "$WORKDIR"' EXIT
 # 1 — Build dependencies
 # =============================================================================
 info "Installing build dependencies..."
-dnf install -y --setopt=install_weak_deps=False -q \
-    rpm-build curl coreutils
+if (( NVR_MODE )); then
+    dnf install -y --setopt=install_weak_deps=False -q curl
+else
+    dnf install -y --setopt=install_weak_deps=False -q \
+        rpm-build curl coreutils
+fi
 ok "Build dependencies installed"
 
 info "Resolving upstream release..."
-source "$SCRIPT_DIR/version.sh"
-VER="$VERSION"
-TAG="v${VER}"
+CURL_AUTH=()
+[[ -n "${GITHUB_TOKEN:-}" ]] && CURL_AUTH=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+TAG="$(curl -fsSL "${CURL_AUTH[@]}" \
+    -H 'Accept: application/vnd.github+json' \
+    https://api.github.com/repos/containerd/nerdctl/releases/latest \
+    | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    | head -1)"
+[[ -n "$TAG" ]] || die "Failed to detect nerdctl release tag"
+VER="${TAG#v}"
+[[ -n "$VER" && "$VER" != "$TAG" ]] || die "Unexpected nerdctl tag format: $TAG"
 ok "nerdctl tag: $TAG (version $VER)"
+
+emit_nvr "$NAME" "$VER" "$RELEASE" "$NVR_ARCH"
+nvr_done
 
 RPMBUILD="$WORKDIR/rpmbuild"
 SOURCES="$RPMBUILD/SOURCES"
@@ -92,7 +114,7 @@ ok "Sources staged"
 cat > "$RPMBUILD/SPECS/nerdctl.spec" <<SPEC
 Name:           nerdctl
 Version:        ${VER}
-Release:        1.mink%{?dist}
+Release:        ${RELEASE}%{?dist}
 Summary:        Docker-compatible CLI for containerd
 License:        Apache-2.0
 URL:            https://github.com/containerd/nerdctl

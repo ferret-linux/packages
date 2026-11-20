@@ -8,12 +8,17 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
 info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 WORKDIR=/tmp/prime-run-build
 rm -rf "$WORKDIR"
@@ -35,6 +40,11 @@ ok "Terra repo ready"
 
 # 2 — Download + republish
 # =============================================================================
+if (( NVR_MODE )); then
+    emit_dnf_urls prime-run
+    nvr_done
+fi
+
 info "Downloading prime-run..."
 dnf download -q --arch x86_64 --arch noarch --destdir /output prime-run
 [[ -n "$(find /output -name 'prime-run-*.rpm' -print -quit)" ]] \

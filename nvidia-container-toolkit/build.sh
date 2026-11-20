@@ -11,12 +11,19 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
+RELEASE=1.mink
+
 info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 WORKDIR=/tmp/nvidia-container-toolkit-build
 rm -rf "$WORKDIR"
@@ -44,6 +51,18 @@ ok "NVIDIA repo ready"
 
 # 3 — Download official RPMs + full runtime dependency closure
 # =============================================================================
+if (( NVR_MODE )); then
+    URL="$(dnf download --url nvidia-container-toolkit 2>/dev/null | head -1)"
+    FILE="${URL##*/}"
+    FILE="${FILE%%\?*}"
+    VERSION="$(printf '%s' "$FILE" | sed -E 's/^nvidia-container-toolkit-([^-]+)-.*$/\1/')"
+    [[ -n "$VERSION" ]] || die "Could not determine toolkit version from $FILE"
+    emit_dnf_urls nvidia-container-toolkit nvidia-container-toolkit-base \
+        libnvidia-container-tools libnvidia-container1
+    emit_nvr "nvidia-container-toolkit-selinux" "$VERSION" "$RELEASE" "noarch"
+    nvr_done
+fi
+
 info "Downloading official NVIDIA RPMs..."
 dnf -y -q download --arch x86_64 --destdir /output \
     nvidia-container-toolkit \
@@ -83,7 +102,7 @@ cp "$POLICY" "$RPMBUILD/SOURCES/nvidia-container.pp"
 cat > "$RPMBUILD/SPECS/nvidia-container-toolkit-selinux.spec" <<SPEC
 Name:           nvidia-container-toolkit-selinux
 Version:        ${VERSION}
-Release:        1%{?dist}
+Release:        ${RELEASE}%{?dist}
 Summary:        NVIDIA Container Toolkit SELinux Policy
 License:        MIT
 URL:            https://github.com/NVIDIA/nvidia-container-toolkit

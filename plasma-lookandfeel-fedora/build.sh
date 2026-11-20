@@ -4,6 +4,12 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
+NAME=plasma-lookandfeel-fedora
+RELEASE=1.mink
+
 WORKDIR="/tmp/plasma-lookandfeel-fedora-build"
 mkdir -p "$WORKDIR"
 cd "$WORKDIR"
@@ -12,13 +18,17 @@ info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 # 1 — Install build dependencies
 # =============================================================================
 info "Installing dependencies..."
-dnf install -y rpm-build --setopt=install_weak_deps=False -q
+if ! (( NVR_MODE )); then
+    dnf install -y rpm-build --setopt=install_weak_deps=False -q
+fi
 
 # 2 — Get version from repos (strip epoch if present)
 # =============================================================================
@@ -32,6 +42,9 @@ VERSION=$(dnf repoquery plasma-lookandfeel-fedora 2>/dev/null \
 [[ -n "$VERSION" ]] || die "Could not determine plasma-lookandfeel-fedora version"
 ok "Version: $VERSION"
 
+emit_nvr "$NAME" "$VERSION" "$RELEASE" "noarch"
+nvr_done
+
 # 3 — Write spec
 # =============================================================================
 RPMBUILD="$WORKDIR/rpmbuild"
@@ -40,7 +53,7 @@ mkdir -p "$RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 cat > "$RPMBUILD/SPECS/plasma-lookandfeel-fedora.spec" <<SPEC
 Name:           plasma-lookandfeel-fedora
 Version:        ${VERSION}
-Release:        1%{?dist}
+Release:        ${RELEASE}%{?dist}
 Summary:        Empty replacement for plasma-lookandfeel-fedora
 License:        MPL-2
 BuildArch:      noarch
@@ -60,7 +73,7 @@ Satisfies all dependencies without installing any Fedora Plasma theming.
 # intentionally empty
 
 %changelog
-* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-1
+* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-${RELEASE}
 - Empty replacement for plasma-lookandfeel-fedora (no Fedora theming)
 SPEC
 

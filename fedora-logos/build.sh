@@ -4,6 +4,12 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
+NAME=fedora-logos
+RELEASE=1.mink
+
 WORKDIR="/tmp/fedora-logos-build"
 mkdir -p "$WORKDIR"
 cd "$WORKDIR"
@@ -12,13 +18,17 @@ info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 # 1 — Install build dependencies
 # =============================================================================
 info "Installing dependencies..."
-dnf install -y rpm-build --setopt=install_weak_deps=False -q
+if ! (( NVR_MODE )); then
+    dnf install -y rpm-build --setopt=install_weak_deps=False -q
+fi
 
 # 2 — Get version from the real package in the repos
 # =============================================================================
@@ -29,6 +39,9 @@ VERSION=$(dnf info fedora-logos 2>/dev/null \
 [[ -n "$VERSION" ]] || die "Could not determine fedora-logos version"
 ok "Version: $VERSION"
 
+emit_nvr "$NAME" "$VERSION" "$RELEASE" "noarch"
+nvr_done
+
 # 3 — Write spec
 # =============================================================================
 RPMBUILD="$WORKDIR/rpmbuild"
@@ -37,7 +50,7 @@ mkdir -p "$RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 cat > "$RPMBUILD/SPECS/fedora-logos.spec" <<SPEC
 Name:           fedora-logos
 Version:        ${VERSION}
-Release:        1%{?dist}
+Release:        ${RELEASE}%{?dist}
 Summary:        Empty replacement for fedora-logos
 License:        MPL-2
 BuildArch:      noarch
@@ -63,7 +76,7 @@ Satisfies all dependencies without installing any Fedora branding files.
 # intentionally empty
 
 %changelog
-* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-1
+* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-${RELEASE}
 - Empty replacement for fedora-logos (no branding)
 SPEC
 

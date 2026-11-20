@@ -4,12 +4,17 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
 info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 # 1 — Install dnf5-plugins & enable COPRs
 # =============================================================================
@@ -27,6 +32,10 @@ echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com
 
 # 2 — Copr RPMs Download
 # =============================================================================
+if (( NVR_MODE )); then
+    emit_dnf_urls bazaar topgrade morewaita-icon-theme
+fi
+
 info "Downloading packages from COPR..."
 dnf download bazaar topgrade morewaita-icon-theme \
     --destdir /output \
@@ -45,6 +54,14 @@ dnf install -y --nogpgcheck \
 dnf reinstall -y terra-release -q
 dnf makecache --refresh
 ok "Terra repo added"
+
+if (( NVR_MODE )); then
+    emit_dnf_urls \
+        scx-scheds scx-tools brave-origin brave-keyring code starship heroic-games-launcher protonplus hack-nerd-fonts nerdfontssymbolsonly-nerd-fonts \
+        ghostty ghostty-nautilus ghostty-zsh-completion ghostty-terminfo ghostty-shell-integration ghostty-bat-syntax ghostty-neovim ghostty-kio noctalia-greeter \
+        yazi zen-browser
+    nvr_done
+fi
 
 info "Downloading packages from Terra..."
 dnf download \

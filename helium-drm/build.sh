@@ -4,12 +4,17 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
 info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 WORKDIR=$(mktemp -d)
 trap 'rm -rf "$WORKDIR"' EXIT
@@ -17,14 +22,28 @@ trap 'rm -rf "$WORKDIR"' EXIT
 # 1 — Dependencies
 # =============================================================================
 info "Installing dependencies..."
-dnf install -y --setopt=install_weak_deps=False -q \
-    python3 dnf5-plugins rpmrebuild fedora-workstation-repositories
+if (( NVR_MODE )); then
+    dnf install -y --setopt=install_weak_deps=False -q \
+        dnf5-plugins fedora-workstation-repositories
+else
+    dnf install -y --setopt=install_weak_deps=False -q \
+        python3 dnf5-plugins rpmrebuild fedora-workstation-repositories
+fi
 
 info "Enabling imput/helium COPR..."
 dnf copr enable -y imput/helium -q
 
 info "Enabling Google Chrome repo..."
 dnf config-manager setopt google-chrome.enabled=1
+
+if (( NVR_MODE )); then
+    HELIUM_URL="$(dnf download --url helium-bin 2>/dev/null | head -1)"
+    HELIUM_FILE="${HELIUM_URL##*/}"
+    HELIUM_FILE="${HELIUM_FILE%%\?*}"
+    [[ "$HELIUM_FILE" == helium-bin-*.rpm ]] || die "Could not resolve helium-bin RPM: $HELIUM_FILE"
+    emit_raw_nvr "helium-drm-${HELIUM_FILE#helium-bin-}"
+    nvr_done
+fi
 
 info "Installing helium-bin..."
 dnf install -y -q helium-bin

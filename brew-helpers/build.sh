@@ -4,23 +4,33 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
+NAME=brew-helpers
+RELEASE=1.mink
+
 info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/version.sh"
 WORKDIR="$(mktemp -d /tmp/brew-helpers-build.XXXXXX)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
 # 1 — Build dependencies
 # =============================================================================
 info "Installing build dependencies..."
-dnf install -y --setopt=install_weak_deps=False -q \
-    rpm-build curl
+if (( NVR_MODE )); then
+    dnf install -y --setopt=install_weak_deps=False -q curl
+else
+    dnf install -y --setopt=install_weak_deps=False -q \
+        rpm-build curl
+fi
 ok "Build dependencies installed"
 
 RPMBUILD="$WORKDIR/rpmbuild"
@@ -39,7 +49,12 @@ TAG="$(curl -fsSL "${CURL_AUTH[@]}" \
     | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
     | head -1)"
 [[ -n "$TAG" ]] || die "Failed to detect Homebrew/brew release tag"
-ok "Homebrew/brew tag: $TAG"
+VERSION="${TAG#v}"
+[[ -n "$VERSION" ]] || die "Unexpected Homebrew tag format: $TAG"
+ok "Homebrew/brew tag: $TAG (version $VERSION)"
+
+emit_nvr "$NAME" "$VERSION" "$RELEASE" "$NVR_ARCH"
+nvr_done
 
 RAW="https://raw.githubusercontent.com/Homebrew/brew/${TAG}"
 info "Fetching completions..."

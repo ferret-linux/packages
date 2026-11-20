@@ -4,6 +4,12 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
+NAME=incus-ui
+RELEASE=1.mink
+
 WORKDIR="/tmp/incus-ui-build"
 STAGING="$WORKDIR/staging"
 RPMBUILD="$WORKDIR/rpmbuild"
@@ -14,20 +20,26 @@ info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 # 1 — Install build dependencies
 # =============================================================================
 info "Installing build dependencies..."
-dnf install -y \
-    nodejs22 \
-    nodejs22-npm \
-    nodejs22-npm-bin \
-    yarnpkg \
-    rpm-build \
-    git \
-    --setopt=install_weak_deps=False -q
+if (( NVR_MODE )); then
+    dnf install -y --setopt=install_weak_deps=False -q git
+else
+    dnf install -y \
+        nodejs22 \
+        nodejs22-npm \
+        nodejs22-npm-bin \
+        yarnpkg \
+        rpm-build \
+        git \
+        --setopt=install_weak_deps=False -q
+fi
 ok "Dependencies installed"
 
 # 2 — Detect latest incus-ui-canonical tag
@@ -46,6 +58,9 @@ VERSION="$(git ls-remote --tags "https://github.com/${GITHUB_REPO}.git" \
 ok "Version: $VERSION"
 
 TAG="incus-${VERSION}"
+
+emit_nvr "$NAME" "$VERSION" "$RELEASE" "noarch"
+nvr_done
 
 # 3 — Download & extract source
 # =============================================================================
@@ -114,7 +129,7 @@ mkdir -p "$RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 cat > "$RPMBUILD/SPECS/incus-ui.spec" <<SPEC
 Name:           incus-ui
 Version:        ${VERSION}
-Release:        1%{?dist}
+Release:        ${RELEASE}%{?dist}
 Summary:        Incus web management UI
 # Based on the Canonical LXD UI (AGPL-3.0), rebranded for Incus
 License:        AGPL-3.0-only
@@ -143,7 +158,7 @@ ${FILES_LIST}
 %systemd_post incus.service
 
 %changelog
-* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-1
+* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-${RELEASE}
 - Automated build from tag ${TAG}
 SPEC
 

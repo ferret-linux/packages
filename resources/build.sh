@@ -4,6 +4,12 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
+NAME=resources
+RELEASE=1.mink
+
 WORKDIR="/tmp/resources-build"
 STAGING="$WORKDIR/staging"
 RPMBUILD="$WORKDIR/rpmbuild"
@@ -13,23 +19,29 @@ info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 # 1 — Install build dependencies
 # =============================================================================
 info "Installing build dependencies..."
-dnf install -y \
-    rust cargo \
-    meson \
-    rpm-build \
-    gettext \
-    glib2-devel \
-    gtk4-devel \
-    libadwaita-devel \
-    git \
-    desktop-file-utils \
-    --setopt=install_weak_deps=False -q
+if (( NVR_MODE )); then
+    dnf install -y --setopt=install_weak_deps=False -q git
+else
+    dnf install -y \
+        rust cargo \
+        meson \
+        rpm-build \
+        gettext \
+        glib2-devel \
+        gtk4-devel \
+        libadwaita-devel \
+        git \
+        desktop-file-utils \
+        --setopt=install_weak_deps=False -q
+fi
 ok "Dependencies installed"
 
 # 2 — Detect latest stable tag
@@ -56,6 +68,9 @@ TAG=$(git ls-remote --tags https://github.com/nokyan/resources.git \
 
 [[ -n "$TAG" ]] || die "Could not resolve tag for version $VERSION"
 ok "Tag: $TAG"
+
+emit_nvr "$NAME" "$VERSION" "$RELEASE" "$NVR_ARCH"
+nvr_done
 
 # 3 — Clone source
 # =============================================================================
@@ -92,7 +107,7 @@ mkdir -p "$RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 cat > "$RPMBUILD/SPECS/resources.spec" <<SPEC
 Name:           resources
 Version:        ${VERSION}
-Release:        1%{?dist}
+Release:        ${RELEASE}%{?dist}
 Summary:        Monitor your system resources and processes
 License:        GPL-3.0-only
 BuildArch:      x86_64
@@ -114,7 +129,7 @@ cp -a "${STAGING}/." "%{buildroot}/"
 ${FILES_LIST}
 
 %changelog
-* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-1
+* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-${RELEASE}
 - Automated build from tag ${TAG}
 SPEC
 

@@ -4,6 +4,12 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
+NAME=extension-manager
+RELEASE=1.mink
+
 WORKDIR="/tmp/extension-manager-build"
 STAGING="$WORKDIR/staging"
 RPMBUILD="$WORKDIR/rpmbuild"
@@ -13,28 +19,34 @@ info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 # 1 — Install build dependencies
 # =============================================================================
 info "Installing build dependencies..."
-dnf install -y \
-    gcc \
-    meson \
-    rpm-build \
-    gettext \
-    git \
-    blueprint-compiler \
-    gtk4-devel \
-    glycin-gtk4-devel \
-    libadwaita-devel \
-    json-glib-devel \
-    libsoup3-devel \
-    libxml2-devel \
-    glib2-devel \
-    desktop-file-utils \
-    --setopt=install_weak_deps=False -q
+if (( NVR_MODE )); then
+    dnf install -y --setopt=install_weak_deps=False -q git
+else
+    dnf install -y \
+        gcc \
+        meson \
+        rpm-build \
+        gettext \
+        git \
+        blueprint-compiler \
+        gtk4-devel \
+        glycin-gtk4-devel \
+        libadwaita-devel \
+        json-glib-devel \
+        libsoup3-devel \
+        libxml2-devel \
+        glib2-devel \
+        desktop-file-utils \
+        --setopt=install_weak_deps=False -q
+fi
 ok "Dependencies installed"
 
 # 2 — Detect latest stable tag
@@ -53,6 +65,9 @@ VERSION=$(echo "$TAG" | sed 's/^v//')
 
 ok "Tag: $TAG"
 ok "Version: $VERSION"
+
+emit_nvr "$NAME" "$VERSION" "$RELEASE" "$NVR_ARCH"
+nvr_done
 
 # 3 — Clone source
 # =============================================================================
@@ -89,7 +104,7 @@ mkdir -p "$RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 cat > "$RPMBUILD/SPECS/extension-manager.spec" <<SPEC
 Name:           extension-manager
 Version:        ${VERSION}
-Release:        1%{?dist}
+Release:        ${RELEASE}%{?dist}
 Summary:        A native tool for browsing and installing GNOME Shell Extensions
 License:        GPL-3.0-only
 BuildArch:      x86_64
@@ -112,7 +127,7 @@ cp -a "${STAGING}/." "%{buildroot}/"
 ${FILES_LIST}
 
 %changelog
-* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-1
+* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-${RELEASE}
 - Automated build from tag ${TAG}
 SPEC
 

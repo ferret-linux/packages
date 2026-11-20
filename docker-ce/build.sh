@@ -4,12 +4,17 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
 info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 # 1 — Add Docker CE repo
 # =============================================================================
@@ -29,6 +34,11 @@ DOCKER_PKGS=(
     docker-buildx-plugin
     docker-compose-plugin
 )
+
+if (( NVR_MODE )); then
+    emit_dnf_urls "${DOCKER_PKGS[@]}"
+    nvr_done
+fi
 
 info "Downloading Docker CE packages..."
 for pkg in "${DOCKER_PKGS[@]}"; do

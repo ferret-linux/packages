@@ -4,12 +4,17 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
 info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 # 1 — Install dnf5-plugins & enable COPRs
 # =============================================================================
@@ -30,6 +35,14 @@ ok "Terra repo added"
 
 # 2 — Download all packages
 # =============================================================================
+if (( NVR_MODE )); then
+    emit_dnf_urls \
+        niri mangowm \
+        qt5ct qt6ct noctalia-greeter satty \
+        cliphist nwg-look xcur2png scenefx
+    nvr_done
+fi
+
 info "Downloading packages..."
 dnf download niri mangowm \
     qt5ct qt6ct noctalia-greeter satty \

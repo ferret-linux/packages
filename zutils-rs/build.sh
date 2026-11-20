@@ -4,6 +4,11 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
+RELEASE=1.mink
+
 WORKDIR="/tmp/zutils-build"
 mkdir -p "$WORKDIR"
 
@@ -11,35 +16,43 @@ info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 # 1 — Install build dependencies
 # =============================================================================
 info "Installing dependencies..."
-dnf install -y rustup rpm-build wget musl-gcc musl-devel musl-filesystem musl-libc-static \
-    git \
-    --setopt=install_weak_deps=False -q
+if (( NVR_MODE )); then
+    dnf install -y wget git curl --setopt=install_weak_deps=False -q
+else
+    dnf install -y rustup rpm-build wget musl-gcc musl-devel musl-filesystem musl-libc-static \
+        git \
+        --setopt=install_weak_deps=False -q
+fi
 
-# — Install latest Go toolchain
-# =============================================================================
-info "[otter] Installing Go toolchain..."
-GO_VERSION=$(curl -sf https://go.dev/VERSION?m=text | head -1 | sed 's/^go//')
-[[ -n "$GO_VERSION" ]] || die "Failed to detect latest Go version"
-ok "[otter] Go version: $GO_VERSION"
+if ! (( NVR_MODE )); then
+    # — Install latest Go toolchain
+    # =============================================================================
+    info "[otter] Installing Go toolchain..."
+    GO_VERSION=$(curl -sf https://go.dev/VERSION?m=text | head -1 | sed 's/^go//')
+    [[ -n "$GO_VERSION" ]] || die "Failed to detect latest Go version"
+    ok "[otter] Go version: $GO_VERSION"
 
-curl -sf "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" \
-    -o /tmp/go.tar.gz
-tar -C /usr/local -xf /tmp/go.tar.gz
-export PATH="/usr/local/go/bin:$PATH"
-ok "[otter] Go installed: $(go version)"
+    curl -sf "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" \
+        -o /tmp/go.tar.gz
+    tar -C /usr/local -xf /tmp/go.tar.gz
+    export PATH="/usr/local/go/bin:$PATH"
+    ok "[otter] Go installed: $(go version)"
 
-# 2 — Setup rustup + musl target (once, shared across all packages)
-# =============================================================================
-info "Setting up rustup..."
-rustup-init -y --default-toolchain stable --profile default
-source "$HOME/.cargo/env"
-rustup target add x86_64-unknown-linux-musl
+    # 2 — Setup rustup + musl target (once, shared across all packages)
+    # =============================================================================
+    info "Setting up rustup..."
+    rustup-init -y --default-toolchain stable --profile default
+    source "$HOME/.cargo/env"
+    rustup target add x86_64-unknown-linux-musl
+fi
 
 # =============================================================================
 #  build_package <name> <summary> <description> <musl: true|false>
@@ -67,6 +80,11 @@ build_package() {
     [[ -n "$VERSION" ]] || die "[$NAME] Failed to detect version from Cargo.toml"
     info "[$NAME] Version: $VERSION"
 
+    if (( NVR_MODE )); then
+        emit_nvr "$NAME" "$VERSION" "$RELEASE" "$NVR_ARCH"
+        return 0
+    fi
+
     info "[$NAME] Building binary..."
     cd "$SRC_DIR"
     if [[ "$USE_MUSL" == "true" ]]; then
@@ -86,7 +104,7 @@ build_package() {
     cat > "$RPMBUILD/SPECS/${NAME}.spec" <<SPEC
 Name:           ${NAME}
 Version:        ${VERSION}
-Release:        1%{?dist}
+Release:        ${RELEASE}%{?dist}
 Summary:        ${SUMMARY}
 License:        MPL-2.0
 BuildArch:      ${BUILD_ARCH}
@@ -102,7 +120,7 @@ install -Dm755 "${BINARY}" %{buildroot}/usr/bin/${NAME}
 /usr/bin/${NAME}
 
 %changelog
-* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-1
+* $(date '+%a %b %d %Y') packages <actions@github.com> - ${VERSION}-${RELEASE}
 - Automated build
 SPEC
 
@@ -149,6 +167,9 @@ OTTER_TAG=$(git ls-remote --tags https://github.com/ferret-linux/otter.git \
 [[ -n "$OTTER_TAG" ]] || die "[otter] Failed to detect latest tag"
 ok "[otter] Tag: $OTTER_TAG"
 
+emit_nvr "otter" "$OTTER_TAG" "$RELEASE" "$NVR_ARCH"
+nvr_done
+
 OTTER_WORKDIR="$WORKDIR/otter"
 OTTER_RPMBUILD="$OTTER_WORKDIR/rpmbuild"
 mkdir -p "$OTTER_WORKDIR"
@@ -170,7 +191,7 @@ mkdir -p "$OTTER_RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 cat > "$OTTER_RPMBUILD/SPECS/otter.spec" <<SPEC
 Name:           otter
 Version:        ${OTTER_TAG}
-Release:        1%{?dist}
+Release:        ${RELEASE}%{?dist}
 Summary:        Spin up host-integrated container environments
 License:        GPL-3.0-only
 BuildArch:      x86_64
@@ -194,7 +215,7 @@ install -Dm644 "${OTTER_WORKDIR}/src/completions/otter.fish" %{buildroot}/usr/sh
 /usr/share/fish/vendor_completions.d/otter.fish
 
 %changelog
-* $(date '+%a %b %d %Y') packages <actions@github.com> - ${OTTER_TAG}-1
+* $(date '+%a %b %d %Y') packages <actions@github.com> - ${OTTER_TAG}-${RELEASE}
 - Automated build from tag ${OTTER_TAG}
 SPEC
 

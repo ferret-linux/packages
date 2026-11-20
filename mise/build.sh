@@ -4,34 +4,59 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
+NAME=mise
+RELEASE=1.mink
+
 info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 WORKDIR="$(mktemp -d /tmp/mise-build.XXXXXX)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
-# 1 — Build dependencies + upstream COPR (build-time only)
+# 1 — Resolve version from upstream COPR (also used by --print-nvr)
 # =============================================================================
-info "Installing build dependencies..."
-dnf install -y --setopt=install_weak_deps=False -q \
-    dnf5-plugins rpm-build cpio patch python3 gcc nasm openssl-devel cmake cargo rust git
-ok "Build dependencies installed"
+info "Installing minimal COPR tooling..."
+if (( NVR_MODE )); then
+    dnf install -y --setopt=install_weak_deps=False -q dnf5-plugins
+else
+    dnf install -y --setopt=install_weak_deps=False -q \
+        dnf5-plugins rpm-build cpio
+fi
+ok "Minimal COPR tooling installed"
 
 info "Enabling upstream COPR (build-time only)..."
 dnf -y copr enable jdxcode/mise
 ok "COPR enabled"
 
-# 2 — Get the source RPM
-# =============================================================================
 info "Downloading latest mise source RPM..."
 dnf --refresh -q download --source mise --destdir "$WORKDIR"
 SRPM="$(find "$WORKDIR" -maxdepth 1 -name 'mise-*.src.rpm' -print -quit)"
 [[ -f "$SRPM" ]] || die "No mise source RPM downloaded"
 ok "Source RPM: $(basename "$SRPM")"
+
+VERSION="$(basename "$SRPM" | sed -E 's/^mise-([0-9][^-]*)-.*$/\1/')"
+[[ -n "$VERSION" && "$VERSION" != "$(basename "$SRPM")" ]] \
+    || die "Could not determine version from $(basename "$SRPM")"
+ok "Version: $VERSION"
+
+emit_nvr "$NAME" "$VERSION" "$RELEASE" "$NVR_ARCH"
+nvr_done
+
+# 2 — Build dependencies
+# =============================================================================
+info "Installing build dependencies..."
+dnf install -y --setopt=install_weak_deps=False -q \
+    patch python3 gcc nasm openssl-devel cmake cargo rust git
+ok "Build dependencies installed"
 
 # 3 — Extract and patch the spec
 # =============================================================================

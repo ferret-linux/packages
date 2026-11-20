@@ -7,12 +7,20 @@
 # =============================================================================
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../.github/scripts/nvr.sh"
+
+NAME=lazydocker
+RELEASE=1.mink
+
 info() { echo "[•] $*"; }
 ok()   { echo "[✓] $*"; }
 die()  { echo "[✗] $*" >&2; exit 1; }
 
-rm -rf /root
-mkdir -p /root/
+if ! (( NVR_MODE )); then
+    rm -rf /root
+    mkdir -p /root/
+fi
 
 WORKDIR=/tmp/lazydocker-build
 RPMBUILD="$WORKDIR/rpmbuild"
@@ -24,8 +32,12 @@ UPSTREAM="jesseduffield/lazydocker"
 # 1 — Build dependencies
 # =============================================================================
 info "Installing build dependencies..."
-dnf install -y --setopt=install_weak_deps=False -q \
-    curl tar gzip rpm-build
+if (( NVR_MODE )); then
+    dnf install -y --setopt=install_weak_deps=False -q curl
+else
+    dnf install -y --setopt=install_weak_deps=False -q \
+        curl tar gzip rpm-build
+fi
 ok "Dependencies installed"
 
 # 2 — Resolve + download the latest release
@@ -37,6 +49,9 @@ TAG="$(curl -fsSI -o /dev/null -w '%{redirect_url}' \
 [[ -n "$TAG" ]] || die "Could not detect latest lazydocker release"
 VERSION="${TAG#v}"
 ok "Version: $VERSION"
+
+emit_nvr "$NAME" "$VERSION" "$RELEASE" "$NVR_ARCH"
+nvr_done
 
 ASSET="lazydocker_${VERSION}_Linux_x86_64.tar.gz"
 info "Downloading ${ASSET}..."
@@ -59,7 +74,7 @@ cp "$BINARY" "$RPMBUILD/SOURCES/lazydocker"
 cat > "$RPMBUILD/SPECS/lazydocker.spec" <<SPEC
 Name:           lazydocker
 Version:        ${VERSION}
-Release:        1%{?dist}
+Release:        ${RELEASE}%{?dist}
 Summary:        Simple terminal UI for Docker and docker-compose
 License:        MIT
 URL:            https://github.com/${UPSTREAM}
