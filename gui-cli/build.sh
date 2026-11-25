@@ -25,6 +25,9 @@ info "Enabling COPRs..."
 dnf copr enable -y lilay/topgrade
 dnf copr enable -y ublue-os/packages
 dnf copr enable -y trixieua/morewaita-icon-theme
+# Ghostty 1.4.x: the COPR spec builds with Zig 0.17 and ships terminfo,
+# shell integrations, completions and desktop extensions in one RPM.
+dnf copr enable -y scottames/ghostty
 dnf config-manager addrepo -y --from-repofile=https://brave-browser-rpm-release.s3.brave.com/brave-browser.repo
 
 sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc &&
@@ -33,10 +36,10 @@ echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com
 # 2 — Copr RPMs Download
 # =============================================================================
 if (( NVR_MODE )); then
-    emit_dnf_urls bazaar topgrade morewaita-icon-theme
+    emit_dnf_urls bazaar topgrade morewaita-icon-theme ghostty
 else
     info "Downloading packages from COPR..."
-    dnf download bazaar topgrade morewaita-icon-theme \
+    dnf download bazaar topgrade morewaita-icon-theme ghostty \
         --destdir /output \
         --arch x86_64 --arch noarch \
         -q
@@ -44,6 +47,7 @@ fi
 
 dnf copr disable -y lilay/topgrade
 dnf copr disable -y ublue-os/packages
+dnf copr disable -y scottames/ghostty
 
 # 3 — Terra RPMs Download
 # ==============================================================================
@@ -58,7 +62,7 @@ ok "Terra repo added"
 if (( NVR_MODE )); then
     emit_dnf_urls \
         scx-scheds scx-tools brave-origin brave-keyring code starship heroic-games-launcher protonplus hack-nerd-fonts nerdfontssymbolsonly-nerd-fonts \
-        ghostty ghostty-nautilus ghostty-zsh-completion ghostty-terminfo ghostty-shell-integration ghostty-bat-syntax ghostty-neovim ghostty-kio noctalia-greeter \
+        noctalia-greeter \
         yazi zen-browser
     nvr_done
 fi
@@ -66,7 +70,7 @@ fi
 info "Downloading packages from Terra..."
 dnf download \
     scx-scheds scx-tools brave-origin brave-keyring code starship heroic-games-launcher protonplus hack-nerd-fonts nerdfontssymbolsonly-nerd-fonts \
-    ghostty ghostty-nautilus ghostty-zsh-completion ghostty-terminfo ghostty-shell-integration ghostty-bat-syntax ghostty-neovim ghostty-kio noctalia-greeter \
+    noctalia-greeter \
     yazi zen-browser \
     --destdir /output \
     --arch x86_64 --arch noarch \
