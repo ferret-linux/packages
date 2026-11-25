@@ -181,9 +181,9 @@ git clone --depth 1 --branch "$OTTER_TAG" \
 ok "[otter] Source cloned"
 
 info "[otter] Building binary..."
-cd "$OTTER_WORKDIR/src"
+cd "$OTTER_WORKDIR/src/otter"
 make build
-ok "[otter] Binary built: $(ls -lh "$OTTER_WORKDIR/src/bin/otter")"
+ok "[otter] Binary built: $(ls -lh "$OTTER_WORKDIR/src/otter/bin/otter")"
 
 info "[otter] Building RPM..."
 mkdir -p "$OTTER_RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
@@ -203,10 +203,10 @@ come pre-configured, opinionated, and ready to go. Works with Docker, Podman,
 and nerdctl.
 
 %install
-install -Dm755 "${OTTER_WORKDIR}/src/bin/otter" %{buildroot}/usr/bin/otter
-install -Dm644 "${OTTER_WORKDIR}/src/completions/otter.bash" %{buildroot}/usr/share/bash-completion/completions/otter
-install -Dm644 "${OTTER_WORKDIR}/src/completions/otter.zsh"  %{buildroot}/usr/share/zsh/site-functions/_otter
-install -Dm644 "${OTTER_WORKDIR}/src/completions/otter.fish" %{buildroot}/usr/share/fish/vendor_completions.d/otter.fish
+install -Dm755 "${OTTER_WORKDIR}/src/otter/bin/otter" %{buildroot}/usr/bin/otter
+install -Dm644 "${OTTER_WORKDIR}/src/otter/completions/otter.bash" %{buildroot}/usr/share/bash-completion/completions/otter
+install -Dm644 "${OTTER_WORKDIR}/src/otter/completions/otter.zsh"  %{buildroot}/usr/share/zsh/site-functions/_otter
+install -Dm644 "${OTTER_WORKDIR}/src/otter/completions/otter.fish" %{buildroot}/usr/share/fish/vendor_completions.d/otter.fish
 
 %files
 /usr/bin/otter

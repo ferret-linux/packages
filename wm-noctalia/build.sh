@@ -22,7 +22,6 @@ info "Installing dnf5-plugins..."
 dnf install -y dnf5-plugins --setopt=install_weak_deps=False -q
 
 info "Enabling COPRs..."
-dnf copr enable -y yalter/niri
 dnf copr enable -y lionheartp/Hyprland
 
 info "Adding Terra repo..."
@@ -37,16 +36,12 @@ ok "Terra repo added"
 # =============================================================================
 if (( NVR_MODE )); then
     emit_dnf_urls \
-        niri mangowm \
-        qt5ct qt6ct noctalia-greeter satty \
-        cliphist nwg-look xcur2png scenefx
+        mangowm noctalia-greeter satty nwg-look xcur2png
     nvr_done
 fi
 
 info "Downloading packages..."
-dnf download niri mangowm \
-    qt5ct qt6ct noctalia-greeter satty \
-    cliphist nwg-look xcur2png scenefx \
+dnf download mangowm noctalia-greeter satty nwg-look xcur2png \
     --destdir /output \
     --arch x86_64 --arch noarch \
     -q
